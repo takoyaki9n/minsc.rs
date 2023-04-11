@@ -1,3 +1,5 @@
+use std::io::{self, BufRead, Write, StdoutLock};
+
 const ONE_LETTER_TOKENS: &str = "()";
 
 fn tokenize(input: &str) -> Vec<String> {
@@ -15,8 +17,9 @@ fn tokenize(input: &str) -> Vec<String> {
             let end = input
                 .find(|c: char| c.is_whitespace() || ONE_LETTER_TOKENS.contains(c))
                 .unwrap_or(input.len());
-            tokens.push(input[..end].to_string());
-            input = &input[end..];
+            let (token, rest) = input.split_at(end);
+            tokens.push(token.to_string());
+            input = rest;
         }
     }
 
@@ -44,8 +47,27 @@ fn parse(input: &str) -> Result<SExpr, String> {
     todo!()
 }
 
+fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()>{
+    stdout.write("> ".as_bytes())?;
+    stdout.flush()
+}
+
 fn main() {
-    println!("Hello World!");
+    let stdin = io::stdin();
+    let mut lines = stdin.lock().lines();
+    let mut stdout = io::stdout().lock();
+
+    loop {
+        print_prompt(&mut stdout).unwrap();
+
+        if let Some(Ok(line)) = lines.next() {
+            let tokens = tokenize(&line);
+            println!("Tokenized: {:?}", tokens);
+        } else {
+            println!("\nBye");
+            break;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -54,8 +76,9 @@ mod tests {
 
     #[test]
     fn test_tokenize() {
-        let input = "(define (fact n)
-            (if (< n 2) 1 (* n (fact (- n 1)))))";
+        let input = r#"
+        (define (fact n)
+            (if (< n 2) 1 (* n (fact (- n 1)))))"#;
         let actual = tokenize(input);
         assert_eq!(
             actual,
