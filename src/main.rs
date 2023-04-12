@@ -1,26 +1,34 @@
-use std::io::{self, BufRead, Write, StdoutLock};
+use std::{
+    collections::VecDeque,
+    io::{self, BufRead, StdoutLock, Write},
+};
 
-const ONE_LETTER_TOKENS: &str = "()";
+const SPECIAL_TOKENS: [&str; 2] = ["(", ")"];
 
-fn tokenize(input: &str) -> Vec<String> {
+fn get_token(input: &str) -> (&str, &str) {
+    let input = input.trim();
+
+    let mut pos = 0;
+    while pos < input.len() {
+        let rest = &input[pos..];
+        let is_end = rest.starts_with(|c: char| c.is_whitespace())
+            || SPECIAL_TOKENS.iter().any(|&token| rest.starts_with(token));
+        if is_end {
+            break;
+        }
+        pos += 1;
+    }
+
+    input.split_at(pos.max(1))
+}
+
+fn tokenize(mut input: &str) -> Vec<&str> {
     let mut tokens = Vec::new();
 
-    let mut input = input.trim();
-    while !input.is_empty() {
-        let chr = input.chars().nth(0).unwrap();
-        if chr.is_whitespace() {
-            input = input.trim_start();
-        } else if ONE_LETTER_TOKENS.contains(chr) {
-            tokens.push(chr.to_string());
-            input = &input[1..];
-        } else {
-            let end = input
-                .find(|c: char| c.is_whitespace() || ONE_LETTER_TOKENS.contains(c))
-                .unwrap_or(input.len());
-            let (token, rest) = input.split_at(end);
-            tokens.push(token.to_string());
-            input = rest;
-        }
+    while input.len() > 0 {
+        let (token, rest) = get_token(input);
+        tokens.push(token);
+        input = rest;
     }
 
     tokens
@@ -39,15 +47,19 @@ enum SExpr {
     Cons(Box<SExpr>, Box<SExpr>),
 }
 
+fn parse_s_expression(tokens: VecDeque<String>) -> Result<SExpr, String> {
+    todo!()
+}
+
 /// s_expression = atom | list
 /// list         = "(" list_loop ")"
 /// list_loop    = "" | s_expression list_loop
 /// atom         = number | symbol
-fn parse(input: &str) -> Result<SExpr, String> {
+fn parse(tokens: Vec<String>) -> Result<SExpr, String> {
     todo!()
 }
 
-fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()>{
+fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()> {
     stdout.write("> ".as_bytes())?;
     stdout.flush()
 }
@@ -78,7 +90,7 @@ mod tests {
     fn test_tokenize() {
         let input = r#"
         (define (fact n)
-            (if (< n 2) 1 (* n (fact (- n 1)))))"#;
+            (if (< n 2) 1 (* n (fact (- n 1))))) "#;
         let actual = tokenize(input);
         assert_eq!(
             actual,
