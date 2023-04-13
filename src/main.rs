@@ -35,28 +35,73 @@ fn tokenize(mut input: &str) -> Vec<&str> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum Value {
+enum SValue {
     Symbol(String),
     Number(f64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum SExpr {
-    Atom(Value),
+    Atom(SValue),
     Nil,
     Cons(Box<SExpr>, Box<SExpr>),
 }
 
-fn parse_s_expression(tokens: VecDeque<String>) -> Result<SExpr, String> {
-    todo!()
+impl SExpr {
+    fn number(x: f64) -> SExpr {
+        Self::Atom(SValue::Number(x))
+    }
+
+    fn symbol(s: String) -> SExpr {
+        Self::Atom(SValue::Symbol(s))
+    }
+
+    fn cons(car: SExpr, cdr: SExpr) -> SExpr {
+        Self::Cons(Box::new(car), Box::new(cdr))
+    }
+}
+
+fn parse_list(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
+    match tokens.front() {
+        Some(&")") => {
+            tokens.pop_front();
+            Ok(SExpr::Nil)
+        }
+        Some(_) => {
+            let car = parse_s_expression(tokens)?;
+            let cdr = parse_list(tokens)?;
+            Ok(SExpr::cons(car, cdr))
+        }
+        None => Err("Unclosed open paren".to_string()),
+    }
+}
+
+fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
+    match tokens.pop_front() {
+        Some("(") => parse_list(tokens),
+        Some(token) => {
+            let expr = match token.parse::<f64>() {
+                Ok(x) => SExpr::number(x),
+                Err(_) => SExpr::symbol(token.to_string()),
+            };
+            Ok(expr)
+        }
+        None => Err("Eof".to_string()),
+    }
 }
 
 /// s_expression = atom | list
-/// list         = "(" list_loop ")"
-/// list_loop    = "" | s_expression list_loop
+/// list         = "(" s_expression* ")"
 /// atom         = number | symbol
-fn parse(tokens: Vec<String>) -> Result<SExpr, String> {
-    todo!()
+fn parse(tokens: Vec<&str>) -> Result<SExpr, String> {
+    let mut tokens = VecDeque::from(tokens);
+    let expr = parse_s_expression(&mut tokens)?;
+
+    if tokens.is_empty() {
+        Ok(expr)
+    } else {
+        Err("Redundant expression".to_string())
+    }
 }
 
 fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()> {
@@ -65,16 +110,23 @@ fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()> {
 }
 
 fn main() {
-    let stdin = io::stdin();
-    let mut lines = stdin.lock().lines();
+    let stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
 
+    let mut lines = stdin.lines();
     loop {
         print_prompt(&mut stdout).unwrap();
 
         if let Some(Ok(line)) = lines.next() {
             let tokens = tokenize(&line);
-            println!("Tokenized: {:?}", tokens);
+            match parse(tokens) {
+                Ok(expr) => {
+                    println!("Parsed {:?}", expr);
+                }
+                Err(error) => {
+                    println!("Parse error: {}", error);
+                }
+            }
         } else {
             println!("\nBye");
             break;
