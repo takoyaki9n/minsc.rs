@@ -35,34 +35,21 @@ fn tokenize(mut input: &str) -> Vec<&str> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum SValue {
-    Symbol(String),
-    Number(f64),
-    SpecialForm(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum SExpr {
-    Atom(SValue),
+enum SExpr<T> {
     Nil,
-    Cons(Box<SExpr>, Box<SExpr>),
+    Atom(T),
+    Cons(Box<SExpr<T>>, Box<SExpr<T>>),
 }
 
-impl SExpr {
-    fn number(x: f64) -> SExpr {
-        Self::Atom(SValue::Number(x))
-    }
-
-    fn symbol(s: String) -> SExpr {
-        Self::Atom(SValue::Symbol(s))
-    }
-
-    fn cons(car: SExpr, cdr: SExpr) -> SExpr {
+impl<T> SExpr<T> {
+    fn cons(car: Self, cdr: Self) -> Self {
         Self::Cons(Box::new(car), Box::new(cdr))
     }
 }
 
-fn parse_list(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
+type Skelton = SExpr<String>;
+
+fn parse_list(tokens: &mut VecDeque<&str>) -> Result<Skelton, String> {
     match tokens.front() {
         Some(&")") => {
             tokens.pop_front();
@@ -77,17 +64,11 @@ fn parse_list(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
     }
 }
 
-fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
+fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<Skelton, String> {
     match tokens.pop_front() {
         Some("(") => parse_list(tokens),
         Some(")") => Err("Unexpected token: )".to_string()),
-        Some(token) => {
-            let expr = match token.parse::<f64>() {
-                Ok(x) => SExpr::number(x),
-                Err(_) => SExpr::symbol(token.to_string()),
-            };
-            Ok(expr)
-        }
+        Some(token) => Ok(SExpr::Atom(token.to_string())),
         None => Err("Unexpected EOF".to_string()),
     }
 }
@@ -95,7 +76,7 @@ fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
 /// s_expression = atom | list
 /// list         = "(" s_expression* ")"
 /// atom         = number | symbol
-fn parse(tokens: Vec<&str>) -> Result<SExpr, String> {
+fn parse(tokens: Vec<&str>) -> Result<Skelton, String> {
     let mut tokens = VecDeque::from(tokens);
     let expr = parse_s_expression(&mut tokens)?;
 
@@ -106,38 +87,69 @@ fn parse(tokens: Vec<&str>) -> Result<SExpr, String> {
     }
 }
 
-fn eval_value(value: SValue) -> Result<SValue, String> {
-    match value {
-        SValue::Symbol(s) => match s.as_str() {
-            "+" | "-" | "*" | "/" => Ok(SValue::SpecialForm(s)),
-            _ => Err(s),
-        },
-        SValue::Number(x) => Ok(SValue::Number(x)),
-        SValue::SpecialForm(_) => Ok(value), // Handle special form
+#[derive(Debug, Clone, PartialEq)]
+enum SValue {
+    Nil,
+    Symbol(String),
+    Number(f64),
+    BuiltInFunc(String),
+}
+
+fn eval_atom(token: String) -> Result<SValue, String> {
+    if let Ok(x) = token.parse::<f64>() {
+        Ok(SValue::Number(x))
+    } else {
+        match token.as_str() {
+            "+" | "-" | "*" | "/" => Ok(SValue::BuiltInFunc(token)),
+            _ => Ok(SValue::Symbol(token)),
+        }
     }
 }
 
-fn args_to_numbers(args: Vec<SValue>) -> Result<Vec<f64>, SValue> {
+fn eval_args(mut expr: Skelton) -> Result<Vec<SValue>, String> {
+    let mut args = Vec::new();
+    loop {
+        match expr {
+            SExpr::Nil => break,
+            SExpr::Atom(value) => {
+                return Err(format!(
+                    "Arguments are not given as list. It ends by {:?}",
+                    value
+                ))
+            }
+            SExpr::Cons(car, cdr) => {
+                let value = eval_expr(*car)?;
+                args.push(value);
+                expr = *cdr;
+            }
+        }
+    }
+    Ok(args)
+}
+
+fn try_map_to_numbers(args: Vec<SValue>) -> Result<Vec<f64>, SValue> {
     args.into_iter()
         .try_fold(Vec::new(), |mut acc, value| match value {
             SValue::Number(x) => {
                 acc.push(x);
                 Ok(acc)
             }
-            SValue::Symbol(_) | SValue::SpecialForm(_) => Err(value),
+            _ => Err(value),
         })
 }
 
-fn eval_special_form(symbol: &str, args: Vec<SValue>) -> Result<SValue, String> {
-    match symbol {
+fn eval_primitive_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
+    let args = eval_args(expr)?;
+
+    match symbol.as_str() {
         "+" => {
-            let args =
-                args_to_numbers(args).map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args = try_map_to_numbers(args)
+                .map_err(|value| format!("Invalid argument: {:?}", value))?;
             Ok(SValue::Number(args.iter().sum()))
         }
         "-" => {
-            let args =
-                args_to_numbers(args).map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args = try_map_to_numbers(args)
+                .map_err(|value| format!("Invalid argument: {:?}", value))?;
             match args.split_first() {
                 Some((init, rest)) => {
                     let result = if rest.len() == 0 {
@@ -151,14 +163,14 @@ fn eval_special_form(symbol: &str, args: Vec<SValue>) -> Result<SValue, String> 
             }
         }
         "*" => {
-            let args =
-                args_to_numbers(args).map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args = try_map_to_numbers(args)
+                .map_err(|value| format!("Invalid argument: {:?}", value))?;
             let result = args.iter().fold(1f64, |acc, x| acc * *x);
             Ok(SValue::Number(result))
         }
         "/" => {
-            let args =
-                args_to_numbers(args).map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args = try_map_to_numbers(args)
+                .map_err(|value| format!("Invalid argument: {:?}", value))?;
             match args.split_first() {
                 Some((first, rest)) => {
                     let result = if rest.len() == 0 {
@@ -175,44 +187,24 @@ fn eval_special_form(symbol: &str, args: Vec<SValue>) -> Result<SValue, String> 
     }
 }
 
-fn eval_args(mut expr: SExpr) -> Result<Vec<SValue>, String> {
-    let mut args = Vec::new();
-    loop {
-        match expr {
-            SExpr::Cons(car, cdr) => {
-                let value = eval(*car)?;
-                args.push(value);
-                expr = *cdr;
-            }
-            SExpr::Nil => break,
-            SExpr::Atom(value) => {
-                return Err(format!(
-                    "Arguments are not given as list. It ends by {:?}",
-                    value
-                ))
-            }
-        }
-    }
-    Ok(args)
-}
-
-fn eval_apply(car: SExpr, cdr: SExpr) -> Result<SValue, String> {
-    match eval(car)? {
-        SValue::Symbol(_) => todo!("Eval symbol"),
-        SValue::SpecialForm(s) => {
-            let args = eval_args(cdr)?;
-            eval_special_form(s.as_str(), args)
-        }
-        SValue::Number(x) => Err(format!("Invalid application: {:?}", x)),
+fn eval_apply(car: Skelton, cdr: Skelton) -> Result<SValue, String> {
+    match eval_expr(car)? {
+        SValue::BuiltInFunc(name) => eval_primitive_func(name, cdr),
+        value => Err(format!("Invalid application: {:?}", value)),
     }
 }
 
-fn eval(expr: SExpr) -> Result<SValue, String> {
+fn eval_expr(expr: Skelton) -> Result<SValue, String> {
     match expr {
-        SExpr::Atom(value) => eval_value(value),
-        SExpr::Nil => todo!("Evaluate Nil"),
+        SExpr::Nil => Ok(SValue::Nil),
+        SExpr::Atom(value) => eval_atom(value),
         SExpr::Cons(car, cdr) => eval_apply(*car, *cdr),
     }
+}
+
+fn eval(expr: Skelton) -> Result<SValue, String> {
+    // TODO: build initial environment.
+    eval_expr(expr)
 }
 
 fn print_prompt(stdout: &mut StdoutLock) -> io::Result<()> {
