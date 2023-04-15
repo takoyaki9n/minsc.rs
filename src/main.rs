@@ -80,6 +80,7 @@ fn parse_list(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
 fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
     match tokens.pop_front() {
         Some("(") => parse_list(tokens),
+        Some(")") => Err("Unexpected token: )".to_string()),
         Some(token) => {
             let expr = match token.parse::<f64>() {
                 Ok(x) => SExpr::number(x),
@@ -87,7 +88,7 @@ fn parse_s_expression(tokens: &mut VecDeque<&str>) -> Result<SExpr, String> {
             };
             Ok(expr)
         }
-        None => Err("Eof".to_string()),
+        None => Err("Unexpected EOF".to_string()),
     }
 }
 
