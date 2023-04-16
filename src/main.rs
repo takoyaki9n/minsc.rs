@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{VecDeque, HashMap},
     io::{self, BufRead, StdoutLock, Write},
 };
 
@@ -138,18 +138,18 @@ fn try_map_to_numbers(args: Vec<SValue>) -> Result<Vec<f64>, SValue> {
         })
 }
 
-fn eval_builtin_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
+fn eval_builtin_func(name: String, expr: Skelton) -> Result<SValue, String> {
     let args = eval_args(expr)?;
 
-    match symbol.as_str() {
+    match name.as_str() {
         "+" => {
-            let args = try_map_to_numbers(args)
-                .map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args =
+                try_map_to_numbers(args).map_err(|value| format!("Invalid argument: {value:?}"))?;
             Ok(SValue::Number(args.iter().sum()))
         }
         "-" => {
-            let args = try_map_to_numbers(args)
-                .map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args =
+                try_map_to_numbers(args).map_err(|value| format!("Invalid argument: {value:?}"))?;
             match args.split_first() {
                 Some((init, rest)) => {
                     let result = if rest.len() == 0 {
@@ -159,18 +159,18 @@ fn eval_builtin_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
                     };
                     Ok(SValue::Number(result))
                 }
-                None => Err(format!("At least one argument required for: {}", symbol)),
+                None => Err(format!("At least one argument required for: {name}")),
             }
         }
         "*" => {
-            let args = try_map_to_numbers(args)
-                .map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args =
+                try_map_to_numbers(args).map_err(|value| format!("Invalid argument: {value:?}"))?;
             let result = args.iter().fold(1f64, |acc, x| acc * *x);
             Ok(SValue::Number(result))
         }
         "/" => {
-            let args = try_map_to_numbers(args)
-                .map_err(|value| format!("Invalid argument: {:?}", value))?;
+            let args =
+                try_map_to_numbers(args).map_err(|value| format!("Invalid argument: {value:?}"))?;
             match args.split_first() {
                 Some((first, rest)) => {
                     let result = if rest.len() == 0 {
@@ -180,17 +180,17 @@ fn eval_builtin_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
                     };
                     Ok(SValue::Number(result))
                 }
-                None => Err(format!("At least one argument required for: {}", symbol)),
+                None => Err(format!("At least one argument required for: {name}")),
             }
         }
-        _ => Err(format!("Invalid special form {}", symbol)),
+        _ => unreachable!("Invalid built-in function: {name}"),
     }
 }
 
 fn eval_apply(car: Skelton, cdr: Skelton) -> Result<SValue, String> {
     match eval_expr(car)? {
         SValue::BuiltInFunc(name) => eval_builtin_func(name, cdr),
-        value => Err(format!("Invalid application: {:?}", value)),
+        value => Err(format!("Invalid application: {value:?}")),
     }
 }
 
@@ -224,11 +224,11 @@ fn main() {
             let tokens = tokenize(&line);
             match parse(tokens) {
                 Ok(expr) => match eval(expr) {
-                    Ok(value) => println!("{:?}", value),
-                    Err(error) => println!("Eval error: {}", error),
+                    Ok(value) => println!("{value:?}"),
+                    Err(error) => println!("Eval error: {error}"),
                 },
                 Err(error) => {
-                    println!("Parse error: {}", error);
+                    println!("Parse error: {error}");
                 }
             }
         } else {
