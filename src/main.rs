@@ -138,7 +138,7 @@ fn try_map_to_numbers(args: Vec<SValue>) -> Result<Vec<f64>, SValue> {
         })
 }
 
-fn eval_primitive_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
+fn eval_builtin_func(symbol: String, expr: Skelton) -> Result<SValue, String> {
     let args = eval_args(expr)?;
 
     match symbol.as_str() {
@@ -189,7 +189,7 @@ fn eval_primitive_func(symbol: String, expr: Skelton) -> Result<SValue, String> 
 
 fn eval_apply(car: Skelton, cdr: Skelton) -> Result<SValue, String> {
     match eval_expr(car)? {
-        SValue::BuiltInFunc(name) => eval_primitive_func(name, cdr),
+        SValue::BuiltInFunc(name) => eval_builtin_func(name, cdr),
         value => Err(format!("Invalid application: {:?}", value)),
     }
 }
