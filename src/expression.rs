@@ -1,13 +1,57 @@
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Nuclear {
+    Bool(bool),
+    Int(i64),
+    Symbol(String),
+}
+
+impl fmt::Display for Nuclear {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Nuclear::Bool(b) if *b => write!(f, "#t"),
+            Nuclear::Bool(_) => write!(f, "#f"),
+            Nuclear::Int(n) => write!(f, "{}", n),
+            Nuclear::Symbol(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum SExpression {
     Nil,
-    Atom(String),
+    Atom(Nuclear),
     Cons(Box<SExpression>, Box<SExpression>),
 }
 
 impl SExpression {
+    pub fn nil() -> Self {
+        Self::Nil
+    }
+
+    pub fn bool(b: bool) -> Self {
+        Self::Atom(Nuclear::Bool(b))
+    }
+
+    pub fn int(n: i64) -> Self {
+        Self::Atom(Nuclear::Int(n))
+    }
+
+    pub fn symbol<S: Into<String>>(s: S) -> Self {
+        Self::Atom(Nuclear::Symbol(s.into()))
+    }
+
+    pub fn cons(car: Self, cdr: Self) -> Self {
+        Self::Cons(Box::new(car), Box::new(cdr))
+    }
+
+    pub fn list(exprs: Vec<Self>) -> Self {
+        exprs
+            .into_iter()
+            .rfold(Self::nil(), |list, expr| Self::cons(expr, list))
+    }
+
     pub fn flatten(self) -> Option<Vec<Self>> {
         let mut exprs = Vec::new();
         let mut expr = self;
@@ -22,24 +66,6 @@ impl SExpression {
             _ => None,
         }
     }
-}
-
-pub fn nil() -> SExpression {
-    SExpression::Nil
-}
-
-pub fn atom<S: Into<String>>(s: S) -> SExpression {
-    SExpression::Atom(s.into())
-}
-
-pub fn cons(car: SExpression, cdr: SExpression) -> SExpression {
-    SExpression::Cons(Box::new(car), Box::new(cdr))
-}
-
-pub fn list(exprs: Vec<SExpression>) -> SExpression {
-    exprs
-        .into_iter()
-        .rfold(nil(), |list, expr| cons(expr, list))
 }
 
 fn fmt_expression(expr: &SExpression, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
@@ -69,7 +95,37 @@ impl fmt::Display for SExpression {
 
 #[cfg(test)]
 mod tests {
-    use super::{atom, cons, list, nil};
+    use super::SExpression;
+
+    fn simple_list_elems() -> Vec<SExpression> {
+        vec![SExpression::int(1), SExpression::int(2)]
+    }
+
+    fn simple_list() -> SExpression {
+        SExpression::list(simple_list_elems())
+    }
+
+    fn incomplete_list() -> SExpression {
+        SExpression::cons(
+            SExpression::int(1),
+            SExpression::cons(SExpression::int(2), SExpression::int(3)),
+        )
+    }
+
+    fn let_expression_elems() -> Vec<SExpression> {
+        vec![
+            SExpression::symbol("let"),
+            SExpression::list(vec![SExpression::list(vec![
+                SExpression::symbol("a"),
+                SExpression::int(2),
+            ])]),
+            SExpression::list(vec![SExpression::symbol("-"), SExpression::symbol("a")]),
+        ]
+    }
+
+    fn let_expression() -> SExpression {
+        SExpression::list(let_expression_elems())
+    }
 
     macro_rules! flatten_tests {
         ($($name: ident: $case: expr,)*) => {
@@ -83,22 +139,11 @@ mod tests {
         }
     }
     flatten_tests! {
-        flatten_nil: (Some(vec![]), nil()),
-        flatten_atom: (None, atom("x")),
-        flatten_simple_list: (Some(vec![atom("1"), atom("2")]), list(vec![atom("1"), atom("2")])),
-        flatten_incomplete_list: (None, cons(atom("1"), cons(atom("2"), atom("3")))),
-        flatten_nested_expression: (
-            Some(vec![
-                atom("let"),
-                list(vec![list(vec![atom("a"), atom("2")])]),
-                list(vec![atom("-"), atom("a")]),
-            ]),
-            list(vec![
-                atom("let"),
-                list(vec![list(vec![atom("a"), atom("2")])]),
-                list(vec![atom("-"), atom("a")]),
-            ])
-        ),
+        flatten_nil: (Some(vec![]), SExpression::nil()),
+        flatten_atom: (None, SExpression::symbol("x")),
+        flatten_simple_list: (Some(simple_list_elems()), simple_list()),
+        flatten_incomplete_list: (None, incomplete_list()),
+        flatten_let_expression: (Some(let_expression_elems()), let_expression()),
     }
 
     macro_rules! display_tests {
@@ -113,18 +158,11 @@ mod tests {
         }
     }
     display_tests! {
-        display_nil: ("()", nil()),
-        display_atom: ("x", atom("x")),
-        display_cons: ("(() . 0)", cons(nil(), atom("0"))),
-        display_simple_list: ("(1 2)", list(vec![atom("1"), atom("2")])),
-        display_incomplete_list: ("(1 2 . 3)", cons(atom("1"), cons(atom("2"), atom("3")))),
-        display_expression: (
-            "(let ((a 2)) (- a))",
-            list(vec![
-                atom("let"),
-                list(vec![list(vec![atom("a"), atom("2")])]),
-                list(vec![atom("-"), atom("a")]),
-            ])
-        ),
+        display_nil: ("()", SExpression::nil()),
+        display_atom: ("x", SExpression::symbol("x")),
+        display_cons: ("(() . 0)", SExpression::cons(SExpression::nil(), SExpression::int(0))),
+        display_simple_list: ("(1 2)", simple_list()),
+        display_incomplete_list: ("(1 2 . 3)", incomplete_list()),
+        display_let_expression: ("(let ((a 2)) (- a))", let_expression()),
     }
 }
