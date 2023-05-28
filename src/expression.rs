@@ -1,19 +1,19 @@
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Nuclear {
+pub enum Primitive {
     Bool(bool),
     Int(i64),
     Symbol(String),
 }
 
-impl fmt::Display for Nuclear {
+impl fmt::Display for Primitive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Nuclear::Bool(b) if *b => write!(f, "#t"),
-            Nuclear::Bool(_) => write!(f, "#f"),
-            Nuclear::Int(n) => write!(f, "{}", n),
-            Nuclear::Symbol(s) => write!(f, "{}", s),
+            Primitive::Bool(b) if *b => write!(f, "#t"),
+            Primitive::Bool(_) => write!(f, "#f"),
+            Primitive::Int(n) => write!(f, "{}", n),
+            Primitive::Symbol(s) => write!(f, "{}", s),
         }
     }
 }
@@ -21,7 +21,7 @@ impl fmt::Display for Nuclear {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SExpression {
     Nil,
-    Atom(Nuclear),
+    Atom(Primitive),
     Cons(Box<SExpression>, Box<SExpression>),
 }
 
@@ -31,15 +31,15 @@ impl SExpression {
     }
 
     pub fn bool(b: bool) -> Self {
-        Self::Atom(Nuclear::Bool(b))
+        Self::Atom(Primitive::Bool(b))
     }
 
     pub fn int(n: i64) -> Self {
-        Self::Atom(Nuclear::Int(n))
+        Self::Atom(Primitive::Int(n))
     }
 
     pub fn symbol<S: Into<String>>(s: S) -> Self {
-        Self::Atom(Nuclear::Symbol(s.into()))
+        Self::Atom(Primitive::Symbol(s.into()))
     }
 
     pub fn cons(car: Self, cdr: Self) -> Self {
