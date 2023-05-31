@@ -1,7 +1,7 @@
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{digit1, one_of};
-use nom::combinator::{map_res, opt};
+use nom::combinator::{all_consuming, map_res, opt};
 use nom::IResult;
 
 use crate::expression::SExpression;
@@ -23,8 +23,17 @@ fn parse_int(s: &str) -> IResult<&str, SExpression> {
     Ok((s, SExpression::int(n)))
 }
 
+fn parse_token(s: &str) -> IResult<&str, &str> {
+    const DELIMITERS: &str = r#"(){}[];"'`|"#;
+    take_while1(|c: char| !c.is_whitespace() && !DELIMITERS.contains(c))(s)
+}
+
 fn parse_atom(s: &str) -> IResult<&str, SExpression> {
-    alt((parse_bool, parse_int))(s)
+    let (s, token) = parse_token(s)?;
+    match all_consuming(alt((parse_bool, parse_int)))(token) {
+        Ok((_, expr)) => Ok((s, expr)),
+        Err(_) => Ok((s, SExpression::symbol(token))),
+    }
 }
 
 pub fn parse(input: &str) -> IResult<&str, SExpression> {
@@ -48,5 +57,17 @@ mod tests {
         assert_eq!(Ok(("", SExpression::int(-2))), parse("-2"));
         assert_eq!(Ok(("", SExpression::int(345))), parse("345"));
         assert_eq!(Ok(("", SExpression::int(-678))), parse("-00678"));
+    }
+
+    #[test]
+    fn parse_symbol_test() {
+        assert_eq!(Ok(("", SExpression::symbol("x"))), parse("x"));
+        assert_eq!(Ok(("", SExpression::symbol("foo"))), parse("foo"));
+        assert_eq!(Ok(("", SExpression::symbol("x1"))), parse("x1"));
+        assert_eq!(Ok(("", SExpression::symbol("3d"))), parse("3d"));
+        assert_eq!(Ok(("", SExpression::symbol("+"))), parse("+"));
+        assert_eq!(Ok(("", SExpression::symbol("-"))), parse("-"));
+        assert_eq!(Ok((")", SExpression::symbol("x"))), parse("x)"));
+        assert_eq!(Ok((" bar", SExpression::symbol("foo"))), parse("foo bar"));
     }
 }
