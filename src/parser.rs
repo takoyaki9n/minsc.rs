@@ -3,20 +3,15 @@ use nom::bytes::complete::{tag, take_while1};
 use nom::character::complete::{char, digit1, multispace0, one_of};
 use nom::combinator::{all_consuming, map_res, opt};
 
-use nom::error::ParseError;
-use nom::sequence::{delimited, terminated};
-use nom::{AsChar, Parser};
-use nom::{IResult, InputTakeAtPosition};
+use nom::sequence::{preceded, terminated};
+use nom::IResult;
 
 use crate::expression::SExpression;
 
-fn trim<I, O, E: ParseError<I>, F>(f: F) -> impl FnMut(I) -> IResult<I, O, E>
-where
-    I: InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: AsChar + Clone,
-    F: Parser<I, O, E>,
-{
-    terminated(f, multispace0)
+macro_rules! trim {
+    ($f: expr) => {
+        preceded(multispace0, $f)
+    };
 }
 
 fn parse_bool(code: &str) -> IResult<&str, SExpression> {
@@ -41,7 +36,7 @@ fn parse_token(code: &str) -> IResult<&str, &str> {
 }
 
 fn parse_atom(code: &str) -> IResult<&str, SExpression> {
-    let (code, token) = trim(parse_token)(code)?;
+    let (code, token) = trim!(parse_token)(code)?;
 
     match all_consuming(alt((parse_bool, parse_int)))(token) {
         Ok((_, expr)) => Ok((code, expr)),
@@ -50,42 +45,39 @@ fn parse_atom(code: &str) -> IResult<&str, SExpression> {
 }
 
 fn parse_cdr(code: &str) -> IResult<&str, SExpression> {
-    let (code, dot) = opt(trim(char('.')))(code)?;
-
-    match dot {
-        Some(_) => {
-            let (code, expr) = trim(parse_expression)(code)?;
-            let (code, _) = trim(char(')'))(code)?;
-
-            Ok((code, expr))
-        }
-        None => parse_car(code),
+    match opt(trim!(char('.')))(code)? {
+        (code, None) => parse_car(code),
+        (code, _) => terminated(parse_expression, trim!(char(')')))(code),
     }
 }
 
 fn parse_car(code: &str) -> IResult<&str, SExpression> {
-    let (code, rparen) = opt(trim(char(')')))(code)?;
-    match rparen {
-        Some(_) => Ok((code, SExpression::nil())),
-        None => {
-            let (code, car) = trim(parse_expression)(code)?;
-            let (code, cdr) = trim(parse_cdr)(code)?;
+    match opt(trim!(char(')')))(code)? {
+        (code, None) => {
+            let (code, car) = parse_expression(code)?;
+            let (code, cdr) = parse_cdr(code)?;
 
             Ok((code, SExpression::cons(car, cdr)))
         }
+        (code, _) => Ok((code, SExpression::nil())),
     }
 }
 
 fn parse_expression(code: &str) -> IResult<&str, SExpression> {
-    let (code, lparen) = opt(trim(char('(')))(code)?;
-    match lparen {
-        Some(_) => trim(parse_car)(code),
-        None => trim(parse_atom)(code),
+    match opt(trim!(char('(')))(code)? {
+        (code, None) => parse_atom(code),
+        (code, _) => parse_car(code),
     }
 }
 
+/**
+ * S_EXPRESSION ::= "(" CAR | ATOM
+ * CAR          ::= ")" | S_EXPRESSION CDR
+ * CDR          ::= "." S_EXPRESSION ")" | CAR
+ * ATOM         ::= BOOL | INT | SYMBOL
+ */
 pub fn parse(code: &str) -> IResult<&str, SExpression> {
-    delimited(multispace0, parse_expression, multispace0)(code)
+    terminated(parse_expression, multispace0)(code)
 }
 
 #[cfg(test)]
