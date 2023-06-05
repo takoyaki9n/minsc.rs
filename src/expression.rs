@@ -1,45 +1,33 @@
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Primitive {
-    Bool(bool),
-    Int(i64),
-    Symbol(String),
-}
+use crate::value::Value;
 
-impl fmt::Display for Primitive {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Primitive::Bool(b) if *b => write!(f, "#t"),
-            Primitive::Bool(_) => write!(f, "#f"),
-            Primitive::Int(n) => write!(f, "{}", n),
-            Primitive::Symbol(s) => write!(f, "{}", s),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SExpression {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Expression {
     Nil,
-    Atom(Primitive),
-    Cons(Box<SExpression>, Box<SExpression>),
+    Atom(Value),
+    Cons(Box<Self>, Box<Self>),
 }
 
-impl SExpression {
+impl Expression {
     pub fn nil() -> Self {
         Self::Nil
     }
 
+    pub fn atom(v: Value) -> Self {
+        Self::Atom(v)
+    }
+
     pub fn bool(b: bool) -> Self {
-        Self::Atom(Primitive::Bool(b))
+        Self::atom(Value::Bool(b))
     }
 
     pub fn int(n: i64) -> Self {
-        Self::Atom(Primitive::Int(n))
+        Self::atom(Value::Int(n))
     }
 
     pub fn symbol<S: Into<String>>(s: S) -> Self {
-        Self::Atom(Primitive::Symbol(s.into()))
+        Self::atom(Value::Symbol(s.into()))
     }
 
     pub fn cons(car: Self, cdr: Self) -> Self {
@@ -68,18 +56,18 @@ impl SExpression {
     }
 }
 
-fn fmt_expression(expr: &SExpression, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
+fn fmt_expression(expr: &Expression, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
     match expr {
-        SExpression::Nil if is_cdr => write!(f, ")"),
-        SExpression::Nil => write!(f, "()"),
-        SExpression::Atom(s) if is_cdr => write!(f, ". {})", s),
-        SExpression::Atom(s) => write!(f, "{}", s),
-        SExpression::Cons(car, cdr) => {
+        Expression::Nil if is_cdr => write!(f, ")"),
+        Expression::Nil => write!(f, "()"),
+        Expression::Atom(s) if is_cdr => write!(f, ". {})", s),
+        Expression::Atom(s) => write!(f, "{}", s),
+        Expression::Cons(car, cdr) => {
             if !is_cdr {
                 write!(f, "(")?;
             }
             fmt_expression(&car, f, false)?;
-            if **cdr != SExpression::Nil {
+            if **cdr != Expression::Nil {
                 write!(f, " ")?;
             }
             fmt_expression(&cdr, f, true)
@@ -87,7 +75,7 @@ fn fmt_expression(expr: &SExpression, f: &mut fmt::Formatter<'_>, is_cdr: bool) 
     }
 }
 
-impl fmt::Display for SExpression {
+impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt_expression(self, f, false)
     }
@@ -95,36 +83,36 @@ impl fmt::Display for SExpression {
 
 #[cfg(test)]
 mod tests {
-    use super::SExpression;
+    use super::Expression;
 
-    fn simple_list_elems() -> Vec<SExpression> {
-        vec![SExpression::int(1), SExpression::int(2)]
+    fn simple_list_elems() -> Vec<Expression> {
+        vec![Expression::int(1), Expression::int(2)]
     }
 
-    fn simple_list() -> SExpression {
-        SExpression::list(simple_list_elems())
+    fn simple_list() -> Expression {
+        Expression::list(simple_list_elems())
     }
 
-    fn incomplete_list() -> SExpression {
-        SExpression::cons(
-            SExpression::int(1),
-            SExpression::cons(SExpression::int(2), SExpression::int(3)),
+    fn incomplete_list() -> Expression {
+        Expression::cons(
+            Expression::int(1),
+            Expression::cons(Expression::int(2), Expression::int(3)),
         )
     }
 
-    fn let_expression_elems() -> Vec<SExpression> {
+    fn let_expression_elems() -> Vec<Expression> {
         vec![
-            SExpression::symbol("let"),
-            SExpression::list(vec![SExpression::list(vec![
-                SExpression::symbol("a"),
-                SExpression::int(2),
+            Expression::symbol("let"),
+            Expression::list(vec![Expression::list(vec![
+                Expression::symbol("a"),
+                Expression::int(2),
             ])]),
-            SExpression::list(vec![SExpression::symbol("-"), SExpression::symbol("a")]),
+            Expression::list(vec![Expression::symbol("-"), Expression::symbol("a")]),
         ]
     }
 
-    fn let_expression() -> SExpression {
-        SExpression::list(let_expression_elems())
+    fn let_expression() -> Expression {
+        Expression::list(let_expression_elems())
     }
 
     macro_rules! flatten_tests {
@@ -139,8 +127,8 @@ mod tests {
         }
     }
     flatten_tests! {
-        flatten_nil: (Some(vec![]), SExpression::nil()),
-        flatten_atom: (None, SExpression::symbol("x")),
+        flatten_nil: (Some(vec![]), Expression::nil()),
+        flatten_atom: (None, Expression::symbol("x")),
         flatten_simple_list: (Some(simple_list_elems()), simple_list()),
         flatten_incomplete_list: (None, incomplete_list()),
         flatten_let_expression: (Some(let_expression_elems()), let_expression()),
@@ -158,9 +146,9 @@ mod tests {
         }
     }
     display_tests! {
-        display_nil: ("()", SExpression::nil()),
-        display_atom: ("x", SExpression::symbol("x")),
-        display_cons: ("(() . 0)", SExpression::cons(SExpression::nil(), SExpression::int(0))),
+        display_nil: ("()", Expression::nil()),
+        display_atom: ("x", Expression::symbol("x")),
+        display_cons: ("(() . 0)", Expression::cons(Expression::nil(), Expression::int(0))),
         display_simple_list: ("(1 2)", simple_list()),
         display_incomplete_list: ("(1 2 . 3)", incomplete_list()),
         display_let_expression: ("(let ((a 2)) (- a))", let_expression()),
