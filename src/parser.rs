@@ -70,18 +70,21 @@ fn parse_expression(code: &str) -> IResult<&str, Expression> {
     }
 }
 
-/**
- * S_EXPRESSION ::= "(" CAR | ATOM
- * CAR          ::= ")" | S_EXPRESSION CDR
- * CDR          ::= "." S_EXPRESSION ")" | CAR
- * ATOM         ::= BOOL | INT | SYMBOL
- */
+/// EXPRESSION ::= "(" CAR | ATOM
+/// CAR        ::= ")" | S_EXPRESSION CDR
+/// CDR        ::= "." S_EXPRESSION ")" | CAR
+/// ATOM       ::= BOOL | INT | SYMBOL
+/// BOOL       ::= "#t" | "#f"
+/// INT        ::= ("+" | "-")? [0-9]+
+/// SYMBOL     ::= [^(){}\[\];"'`|]
 pub fn parse(code: &str) -> IResult<&str, Expression> {
     terminated(parse_expression, multispace0)(code)
 }
 
 #[cfg(test)]
 mod tests {
+    use nom::error::Error;
+
     use crate::{expression::Expression, parser::parse};
 
     #[test]
@@ -112,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_list() {
+    fn parse_expression_test() {
         assert_eq!(Ok(("", Expression::nil())), parse("()"));
         assert_eq!(Ok(("", Expression::nil())), parse(" ( ) "));
 
@@ -138,6 +141,12 @@ mod tests {
         );
         assert_eq!(Ok(("", expr)), parse("(x y . z)"));
 
+        let expr = Expression::cons(
+            Expression::list(vec![Expression::int(1), Expression::int(2)]),
+            Expression::list(vec![Expression::int(3), Expression::int(4)]),
+        );
+        assert_eq!(Ok(("", expr)), parse("((1 2).(3 4))"));
+
         let expr = Expression::list(vec![
             Expression::symbol("x"),
             Expression::symbol("y."),
@@ -157,5 +166,14 @@ mod tests {
             Expression::list(vec![Expression::symbol("-"), Expression::symbol("a")]),
         ]);
         assert_eq!(Ok(("", expr)), parse("(let ((a 2)) (- a))"));
+    }
+
+    #[test]
+    fn parse_error_test() {
+        assert!(parse("").is_err());
+        assert!(parse(")").is_err());
+        assert!(parse("(1 2 3").is_err());
+        assert!(parse("(1 . 2 3)").is_err());
+        assert!(parse("(()").is_err());
     }
 }
