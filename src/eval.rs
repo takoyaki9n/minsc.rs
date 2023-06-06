@@ -1,4 +1,4 @@
-use crate::{expression::Expression, parser::parse, value::Value};
+use crate::{expression::Expression, value::Value};
 
 fn eval_atom(value: Value) -> Result<Value, String> {
     match value {
@@ -43,17 +43,27 @@ pub fn eval(expr: Expression) -> Result<Value, String> {
     }
 }
 
-#[test]
-fn eval_if_test() {
-    let (_, expr) = parse("(if #t 1 2)").unwrap();
-    let value = eval(expr).unwrap();
-    assert_eq!(Value::Int(1), value);
+#[cfg(test)]
+mod tests {
+    use crate::{parser::parse, value::Value};
+    use super::eval;
 
-    let (_, expr) = parse("(if #f 1 2)").unwrap();
-    let value = eval(expr).unwrap();
-    assert_eq!(Value::Int(2), value);
+    #[test]
+    fn eval_if_test() {
+        let (_, expr) = parse("(if #t 1 2)").unwrap();
+        let value = eval(expr).unwrap();
+        assert_eq!(Value::Int(1), value);
 
-    let (_, expr) = parse("(if 0 1 2)").unwrap();
-    let value = eval(expr).unwrap();
-    assert_eq!(Value::Int(1), value);
+        let (_, expr) = parse("(if #f 1 2)").unwrap();
+        let value = eval(expr).unwrap();
+        assert_eq!(Value::Int(2), value);
+
+        let (_, expr) = parse("(if 0 1 2)").unwrap();
+        let value = eval(expr).unwrap();
+        assert_eq!(Value::Int(1), value);
+
+        let (_, expr) = parse("(if (if #t #f #t) (if #f 1 2) (if #t 3 4))").unwrap();
+        let value = eval(expr).unwrap();
+        assert_eq!(Value::Int(3), value);
+    }
 }

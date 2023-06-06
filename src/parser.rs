@@ -78,6 +78,7 @@ fn parse_expression(code: &str) -> IResult<&str, Expression> {
 /// BOOL       ::= "#t" | "#f"
 /// INT        ::= [+-]? [0-9]+
 /// SYMBOL     ::= [^(){}\[\];"'`|]
+/// ```
 pub fn parse(code: &str) -> IResult<&str, Expression> {
     terminated(parse_expression, multispace0)(code)
 }
