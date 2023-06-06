@@ -70,12 +70,13 @@ fn parse_expression(code: &str) -> IResult<&str, Expression> {
     }
 }
 
+/// ```
 /// EXPRESSION ::= "(" CAR | ATOM
 /// CAR        ::= ")" | S_EXPRESSION CDR
 /// CDR        ::= "." S_EXPRESSION ")" | CAR
 /// ATOM       ::= BOOL | INT | SYMBOL
 /// BOOL       ::= "#t" | "#f"
-/// INT        ::= ("+" | "-")? [0-9]+
+/// INT        ::= [+-]? [0-9]+
 /// SYMBOL     ::= [^(){}\[\];"'`|]
 pub fn parse(code: &str) -> IResult<&str, Expression> {
     terminated(parse_expression, multispace0)(code)
@@ -83,8 +84,6 @@ pub fn parse(code: &str) -> IResult<&str, Expression> {
 
 #[cfg(test)]
 mod tests {
-    use nom::error::Error;
-
     use crate::{expression::Expression, parser::parse};
 
     #[test]
