@@ -56,10 +56,10 @@ fn built_in_div(args: Vec<Value>) -> Result<Value, String> {
 
 fn eval_symbol(sym: String) -> Result<Value, String> {
     match sym.as_str() {
-        "+" => Ok(Value::BuiltInFunc(format!("+"), built_in_add)),
-        "-" => Ok(Value::BuiltInFunc(format!("-"), built_in_sub)),
-        "*" => Ok(Value::BuiltInFunc(format!("*"), built_in_mul)),
-        "/" => Ok(Value::BuiltInFunc(format!("/"), built_in_div)),
+        "+" => Ok(Value::BuiltInProc(format!("+"), built_in_add)),
+        "-" => Ok(Value::BuiltInProc(format!("-"), built_in_sub)),
+        "*" => Ok(Value::BuiltInProc(format!("*"), built_in_mul)),
+        "/" => Ok(Value::BuiltInProc(format!("/"), built_in_div)),
         _ => todo!(),
     }
 }
@@ -95,7 +95,7 @@ fn eval_args(args: Vec<Expression>) -> Result<Vec<Value>, String> {
 
 fn eval_apply(car: Expression, cdrs: Vec<Expression>) -> Result<Value, String> {
     match eval(car)? {
-        Value::BuiltInFunc(_, func) => func(eval_args(cdrs)?),
+        Value::BuiltInProc(_, func) => func(eval_args(cdrs)?),
         _ => Err(format!("Eval Error: Invalid application.")),
     }
 }
