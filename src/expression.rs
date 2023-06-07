@@ -19,15 +19,15 @@ impl Expression {
     }
 
     pub fn bool(b: bool) -> Self {
-        Self::atom(Value::Bool(b))
+        Self::atom(Value::bool(b))
     }
 
     pub fn int(n: i64) -> Self {
-        Self::atom(Value::Int(n))
+        Self::atom(Value::int(n))
     }
 
     pub fn symbol<S: Into<String>>(s: S) -> Self {
-        Self::atom(Value::Symbol(s.into()))
+        Self::atom(Value::symbol(s))
     }
 
     pub fn cons(car: Self, cdr: Self) -> Self {

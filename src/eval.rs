@@ -1,65 +1,15 @@
-use std::collections::VecDeque;
-
-use crate::{expression::Expression, value::Value};
-
-fn expect_numbers(values: Vec<Value>) -> Result<Vec<i64>, String> {
-    values
-        .into_iter()
-        .try_fold(Vec::new(), |mut numbers, value| match value {
-            Value::Int(n) => {
-                numbers.push(n);
-                Ok(numbers)
-            }
-            _ => Err(format!("Type Error: Number expected: {}", value)),
-        })
-}
-
-fn built_in_arithmetic_operation<F: Fn(i64, i64) -> i64>(
-    name: &str,
-    args: Vec<Value>,
-    f: F,
-    unit: i64,
-    commutative: bool,
-) -> Result<Value, String> {
-    let mut numbers = VecDeque::from_iter(expect_numbers(args)?);
-    if commutative {
-        Ok(Value::Int(numbers.into_iter().fold(unit, f)))
-    } else if let Some(first) = numbers.pop_front() {
-        if numbers.len() == 0 {
-            Ok(Value::Int(f(unit, first)))
-        } else {
-            Ok(Value::Int(numbers.into_iter().fold(first, f)))
-        }
-    } else {
-        Err(format!(
-            "Eval Error: Procedure reuqires at least one artument: {}",
-            name
-        ))
-    }
-}
-
-fn built_in_add(args: Vec<Value>) -> Result<Value, String> {
-    built_in_arithmetic_operation("+", args, |x, y| x + y, 0, true)
-}
-
-fn built_in_sub(args: Vec<Value>) -> Result<Value, String> {
-    built_in_arithmetic_operation("-", args, |x, y| x - y, 0, false)
-}
-
-fn built_in_mul(args: Vec<Value>) -> Result<Value, String> {
-    built_in_arithmetic_operation("*", args, |x, y| x * y, 1, true)
-}
-
-fn built_in_div(args: Vec<Value>) -> Result<Value, String> {
-    built_in_arithmetic_operation("/", args, |x, y| x / y, 1, false)
-}
+use crate::{
+    built_in_procs::numbers::{built_in_add, built_in_div, built_in_mul, built_in_sub},
+    expression::Expression,
+    value::Value,
+};
 
 fn eval_symbol(sym: String) -> Result<Value, String> {
     match sym.as_str() {
-        "+" => Ok(Value::BuiltInProc(format!("+"), built_in_add)),
-        "-" => Ok(Value::BuiltInProc(format!("-"), built_in_sub)),
-        "*" => Ok(Value::BuiltInProc(format!("*"), built_in_mul)),
-        "/" => Ok(Value::BuiltInProc(format!("/"), built_in_div)),
+        "+" => Ok(built_in_add()),
+        "-" => Ok(built_in_sub()),
+        "*" => Ok(built_in_mul()),
+        "/" => Ok(built_in_div()),
         _ => todo!(),
     }
 }
@@ -100,6 +50,13 @@ fn eval_apply(car: Expression, cdrs: Vec<Expression>) -> Result<Value, String> {
     }
 }
 
+fn opt_symbol(expr: &Expression) -> Option<&str> {
+    match expr {
+        Expression::Atom(Value::Symbol(sym)) => Some(sym.as_str()),
+        _ => None,
+    }
+}
+
 pub fn eval(expr: Expression) -> Result<Value, String> {
     match expr {
         Expression::Nil => Err(format!("TODO: Eval \"{}\"", expr)),
@@ -108,13 +65,10 @@ pub fn eval(expr: Expression) -> Result<Value, String> {
             let cdrs = cdr
                 .flatten()
                 .ok_or(format!("Syntax Error: proper list is expected."))?;
-            if let Expression::Atom(Value::Symbol(sym)) = *car {
-                match sym.as_str() {
-                    "if" => eval_if(cdrs),
-                    _ => eval_apply(Expression::symbol(sym), cdrs),
-                }
-            } else {
-                eval_apply(*car, cdrs)
+
+            match opt_symbol(&car) {
+                Some("if") => eval_if(cdrs),
+                _ => eval_apply(*car, cdrs),
             }
         }
     }

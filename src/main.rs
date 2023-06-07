@@ -1,5 +1,11 @@
+mod expression;
+mod parser;
+mod value;
+mod eval;
+mod built_in_procs;
+
 use std::{
-    collections::{VecDeque, HashMap},
+    collections::VecDeque,
     io::{self, BufRead, StdoutLock, Write},
 };
 
