@@ -1,3 +1,5 @@
+use std::collections::LinkedList;
+
 use crate::{expression::Expression, value::Value};
 
 fn expect_numbers(values: Vec<Value>) -> Result<Vec<i64>, String> {
@@ -12,15 +14,52 @@ fn expect_numbers(values: Vec<Value>) -> Result<Vec<i64>, String> {
         })
 }
 
+fn built_in_arithmetic_operation<F: Fn(i64, i64) -> i64>(
+    name: &str,
+    args: Vec<Value>,
+    f: F,
+    unit: i64,
+    commutative: bool,
+) -> Result<Value, String> {
+    let mut numbers = LinkedList::from_iter(expect_numbers(args)?);
+    if let Some(first) = numbers.pop_front() {
+        if !commutative && numbers.len() == 0 {
+            Ok(Value::Int(f(unit, first)))
+        } else {
+            Ok(Value::Int(numbers.into_iter().fold(first, f)))
+        }
+    } else if commutative {
+        Ok(Value::Int(unit))
+    } else {
+        Err(format!(
+            "Eval Error: Procedure reuqires at least one artument: {}",
+            name
+        ))
+    }
+}
+
 fn built_in_add(args: Vec<Value>) -> Result<Value, String> {
-    let numbers = expect_numbers(args)?;
-    let ans = numbers.into_iter().fold(0, |acc, n| acc + n);
-    Ok(Value::Int(ans))
+    built_in_arithmetic_operation("+", args, |x, y| x + y, 0, true)
+}
+
+fn built_in_sub(args: Vec<Value>) -> Result<Value, String> {
+    built_in_arithmetic_operation("-", args, |x, y| x - y, 0, false)
+}
+
+fn built_in_mul(args: Vec<Value>) -> Result<Value, String> {
+    built_in_arithmetic_operation("*", args, |x, y| x * y, 1, true)
+}
+
+fn built_in_div(args: Vec<Value>) -> Result<Value, String> {
+    built_in_arithmetic_operation("/", args, |x, y| x / y, 1, false)
 }
 
 fn eval_symbol(sym: String) -> Result<Value, String> {
     match sym.as_str() {
-        "+" => Ok(Value::BuiltInFunc("+".to_string(), built_in_add)),
+        "+" => Ok(Value::BuiltInFunc(format!("+"), built_in_add)),
+        "-" => Ok(Value::BuiltInFunc(format!("-"), built_in_sub)),
+        "*" => Ok(Value::BuiltInFunc(format!("*"), built_in_mul)),
+        "/" => Ok(Value::BuiltInFunc(format!("/"), built_in_div)),
         _ => todo!(),
     }
 }
@@ -107,20 +146,26 @@ mod tests {
 
     #[test]
     fn eval_arithmetic_operators_test() {
-        let (_, expr) = parse("(+)").unwrap();
-        let value = eval(expr).unwrap();
-        assert_eq!(Value::Int(0), value);
-
-        let (_, expr) = parse("(+ 10)").unwrap();
-        let value = eval(expr).unwrap();
-        assert_eq!(Value::Int(10), value);
-
-        let (_, expr) = parse("(+ 1 2)").unwrap();
-        let value = eval(expr).unwrap();
-        assert_eq!(Value::Int(3), value);
-
-        let (_, expr) = parse("(+ 1 -2 3 -4)").unwrap();
-        let value = eval(expr).unwrap();
-        assert_eq!(Value::Int(-2), value);
+        let cases = vec![
+            ("(+)", 0),
+            ("(+ 10)", 10),
+            ("(+ 1 2)", 3),
+            ("(+ 1 2 3 4)", 10),
+            ("(- 10)", -10),
+            ("(- 1 2)", -1),
+            ("(- 1000 100 10 1)", 889),
+            ("(*))", 1),
+            ("(* 5))", 5),
+            ("(* 2 3))", 6),
+            ("(* 1 2 3 4))", 24),
+            ("(/ 2))", 0),
+            ("(/ 15 4))", 3),
+            ("(/ 1000 5 2 10))", 10),
+        ];
+        cases.into_iter().for_each(|(input, expected)| {
+            let (_, expr) = parse(input).unwrap();
+            let actual = eval(expr).unwrap();
+            assert_eq!(actual, Value::Int(expected));
+        });
     }
 }
