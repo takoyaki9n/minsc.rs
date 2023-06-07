@@ -21,21 +21,24 @@ fn built_in_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     unit: i64,
     commutative: bool,
 ) -> Result<Value, String> {
-    let mut numbers = VecDeque::from_iter(expect_numbers(args)?);
+    let numbers = expect_numbers(args)?;
     if commutative {
         Ok(Value::Int(numbers.into_iter().fold(unit, f)))
-    } else if let Some(first) = numbers.pop_front() {
-        if numbers.len() == 0 {
-            Ok(Value::Int(f(unit, first)))
-        } else {
-            Ok(Value::Int(numbers.into_iter().fold(first, f)))
-        }
     } else {
-        Err(format!(
-            "Eval Error: Procedure reuqires at least one artument: {}",
-            name
-        ))
-    }
+        let mut numbers = VecDeque::from_iter(numbers);
+        if let Some(first) = numbers.pop_front() {
+            if numbers.len() == 0 {
+                Ok(Value::Int(f(unit, first)))
+            } else {
+                Ok(Value::Int(numbers.into_iter().fold(first, f)))
+            }
+        } else {
+            Err(format!(
+                "Eval Error: Procedure reuqires at least one artument: {}",
+                name
+            ))
+        }
+    } 
 }
 
 pub fn built_in_add() -> Value {
