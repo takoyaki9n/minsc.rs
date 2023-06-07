@@ -5,6 +5,7 @@ pub enum Value {
     Bool(bool),
     Int(i64),
     Symbol(String),
+    BuiltInFunc(String, fn(Vec<Value>) -> Result<Value, String>),
 }
 
 impl fmt::Display for Value {
@@ -14,6 +15,7 @@ impl fmt::Display for Value {
             Self::Bool(_) => write!(f, "#f"),
             Self::Int(n) => write!(f, "{}", n),
             Self::Symbol(s) => write!(f, "{}", s),
+            Self::BuiltInFunc(name, _) => write!(f, "<Built-In-Func: {}>", name),
         }
     }
 }
