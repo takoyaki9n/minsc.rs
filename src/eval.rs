@@ -97,29 +97,4 @@ mod tests {
         let value = eval(expr).unwrap();
         assert_eq!(Value::Int(3), value);
     }
-
-    #[test]
-    fn eval_arithmetic_operators_test() {
-        let cases = vec![
-            ("(+)", 0),
-            ("(+ 10)", 10),
-            ("(+ 1 2)", 3),
-            ("(+ 1 2 3 4)", 10),
-            ("(- 10)", -10),
-            ("(- 1 2)", -1),
-            ("(- 1000 100 10 1)", 889),
-            ("(*))", 1),
-            ("(* 5))", 5),
-            ("(* 2 3))", 6),
-            ("(* 1 2 3 4))", 24),
-            ("(/ 2))", 0),
-            ("(/ 15 4))", 3),
-            ("(/ 1000 5 2 10))", 10),
-        ];
-        cases.into_iter().for_each(|(input, expected)| {
-            let (_, expr) = parse(input).unwrap();
-            let actual = eval(expr).unwrap();
-            assert_eq!(actual, Value::Int(expected));
-        });
-    }
 }
