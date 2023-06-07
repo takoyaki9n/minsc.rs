@@ -6,7 +6,7 @@ use nom::combinator::{all_consuming, map_res, opt};
 use nom::sequence::{preceded, terminated};
 use nom::IResult;
 
-use crate::expression::Expression;
+use crate::expression::{bool, cons, int, nil, symbol, Expression};
 
 macro_rules! trim {
     ($f: expr) => {
@@ -17,7 +17,7 @@ macro_rules! trim {
 fn parse_bool(code: &str) -> IResult<&str, Expression> {
     let (code, tag) = alt((tag("#t"), tag("#f")))(code)?;
 
-    Ok((code, Expression::bool(tag == "#t")))
+    Ok((code, bool(tag == "#t")))
 }
 
 fn parse_int(code: &str) -> IResult<&str, Expression> {
@@ -27,7 +27,7 @@ fn parse_int(code: &str) -> IResult<&str, Expression> {
     let (code, n) = map_res(digit1, |n: &str| n.parse::<i64>())(code)?;
     let n = if sign == '+' { n } else { -n };
 
-    Ok((code, Expression::int(n)))
+    Ok((code, int(n)))
 }
 
 fn parse_token(code: &str) -> IResult<&str, &str> {
@@ -40,7 +40,7 @@ fn parse_atom(code: &str) -> IResult<&str, Expression> {
 
     match all_consuming(alt((parse_bool, parse_int)))(token) {
         Ok((_, expr)) => Ok((code, expr)),
-        Err(_) => Ok((code, Expression::symbol(token))),
+        Err(_) => Ok((code, symbol(token))),
     }
 }
 
@@ -57,9 +57,9 @@ fn parse_car(code: &str) -> IResult<&str, Expression> {
             let (code, car) = parse_expression(code)?;
             let (code, cdr) = parse_cdr(code)?;
 
-            Ok((code, Expression::cons(car, cdr)))
+            Ok((code, cons(car, cdr)))
         }
-        (code, _) => Ok((code, Expression::nil())),
+        (code, _) => Ok((code, nil())),
     }
 }
 
@@ -85,87 +85,68 @@ pub fn parse(code: &str) -> IResult<&str, Expression> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{expression::Expression, parser::parse};
+    use super::parse;
+    use crate::expression::{bool, cons, int, list, nil, symbol};
 
     #[test]
     fn parse_bool_test() {
-        assert_eq!(Ok(("", Expression::bool(true))), parse("#t"));
-        assert_eq!(Ok(("", Expression::bool(false))), parse("#f"));
+        assert_eq!(Ok(("", bool(true))), parse("#t"));
+        assert_eq!(Ok(("", bool(false))), parse("#f"));
     }
 
     #[test]
     fn parse_int_test() {
-        assert_eq!(Ok(("", Expression::int(0))), parse("0"));
-        assert_eq!(Ok(("", Expression::int(1))), parse("+1"));
-        assert_eq!(Ok(("", Expression::int(-2))), parse("-2"));
-        assert_eq!(Ok(("", Expression::int(345))), parse("345"));
-        assert_eq!(Ok(("", Expression::int(-678))), parse("-00678"));
+        assert_eq!(Ok(("", int(0))), parse("0"));
+        assert_eq!(Ok(("", int(1))), parse("+1"));
+        assert_eq!(Ok(("", int(-2))), parse("-2"));
+        assert_eq!(Ok(("", int(345))), parse("345"));
+        assert_eq!(Ok(("", int(-678))), parse("-00678"));
     }
 
     #[test]
     fn parse_symbol_test() {
-        assert_eq!(Ok(("", Expression::symbol("x"))), parse("x"));
-        assert_eq!(Ok(("", Expression::symbol("foo"))), parse("foo"));
-        assert_eq!(Ok(("", Expression::symbol("x1"))), parse("x1"));
-        assert_eq!(Ok(("", Expression::symbol("3d"))), parse("3d"));
-        assert_eq!(Ok(("", Expression::symbol("+"))), parse("+"));
-        assert_eq!(Ok(("", Expression::symbol("-"))), parse("-"));
-        assert_eq!(Ok((")", Expression::symbol("x"))), parse("x)"));
-        assert_eq!(Ok(("bar", Expression::symbol("foo"))), parse("foo bar"));
+        assert_eq!(Ok(("", symbol("x"))), parse("x"));
+        assert_eq!(Ok(("", symbol("foo"))), parse("foo"));
+        assert_eq!(Ok(("", symbol("x1"))), parse("x1"));
+        assert_eq!(Ok(("", symbol("3d"))), parse("3d"));
+        assert_eq!(Ok(("", symbol("+"))), parse("+"));
+        assert_eq!(Ok(("", symbol("-"))), parse("-"));
+        assert_eq!(Ok((")", symbol("x"))), parse("x)"));
+        assert_eq!(Ok(("bar", symbol("foo"))), parse("foo bar"));
     }
 
     #[test]
-    fn parse_expression_test() {
-        assert_eq!(Ok(("", Expression::nil())), parse("()"));
-        assert_eq!(Ok(("", Expression::nil())), parse(" ( ) "));
+    fn parse_list_test() {
+        assert_eq!(Ok(("", nil())), parse("()"));
+        assert_eq!(Ok(("", nil())), parse(" ( ) "));
 
-        assert_eq!(
-            Ok(("", Expression::list(vec![Expression::symbol("x")]))),
-            parse("(x)")
-        );
-        assert_eq!(
-            Ok(("", Expression::list(vec![Expression::symbol("x")]))),
-            parse(" ( x ) ")
-        );
+        assert_eq!(Ok(("", list(vec![symbol("x")]))), parse("(x)"));
+        assert_eq!(Ok(("", list(vec![symbol("x")]))), parse(" ( x ) "));
 
-        let expr = Expression::list(vec![
-            Expression::bool(true),
-            Expression::int(2),
-            Expression::symbol("y"),
-        ]);
+        let expr = list(vec![bool(true), int(2), symbol("y")]);
         assert_eq!(Ok(("", expr)), parse("(#t 2 y)"));
 
-        let expr = Expression::cons(
-            Expression::symbol("x"),
-            Expression::cons(Expression::symbol("y"), Expression::symbol("z")),
-        );
-        assert_eq!(Ok(("", expr)), parse("(x y . z)"));
-
-        let expr = Expression::cons(
-            Expression::list(vec![Expression::int(1), Expression::int(2)]),
-            Expression::list(vec![Expression::int(3), Expression::int(4)]),
-        );
-        assert_eq!(Ok(("", expr)), parse("((1 2).(3 4))"));
-
-        let expr = Expression::list(vec![
-            Expression::symbol("x"),
-            Expression::symbol("y."),
-            Expression::symbol("z"),
-        ]);
-        assert_eq!(Ok(("", expr)), parse("(x y. z)"));
-
-        let expr = Expression::list(vec![Expression::symbol("x"), Expression::symbol("y")]);
-        assert_eq!(Ok(("", expr)), parse("(x y . ())"));
-
-        let expr = Expression::list(vec![
-            Expression::symbol("let"),
-            Expression::list(vec![Expression::list(vec![
-                Expression::symbol("a"),
-                Expression::int(2),
-            ])]),
-            Expression::list(vec![Expression::symbol("-"), Expression::symbol("a")]),
+        let expr = list(vec![
+            symbol("let"),
+            list(vec![list(vec![symbol("a"), int(2)])]),
+            list(vec![symbol("-"), symbol("a")]),
         ]);
         assert_eq!(Ok(("", expr)), parse("(let ((a 2)) (- a))"));
+    }
+
+    #[test]
+    fn parse_cons_test() {
+        let expr = cons(symbol("x"), cons(symbol("y"), symbol("z")));
+        assert_eq!(Ok(("", expr)), parse("(x y . z)"));
+
+        let expr = cons(list(vec![int(1), int(2)]), list(vec![int(3), int(4)]));
+        assert_eq!(Ok(("", expr)), parse("((1 2).(3 4))"));
+
+        let expr = list(vec![symbol("x"), symbol("y."), symbol("z")]);
+        assert_eq!(Ok(("", expr)), parse("(x y. z)"));
+
+        let expr = list(vec![symbol("x"), symbol("y")]);
+        assert_eq!(Ok(("", expr)), parse("(x y . ())"));
     }
 
     #[test]

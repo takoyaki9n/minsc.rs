@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::value::Value;
+use crate::value::{self, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expression {
@@ -10,36 +10,6 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn nil() -> Self {
-        Self::Nil
-    }
-
-    pub fn atom(v: Value) -> Self {
-        Self::Atom(v)
-    }
-
-    pub fn bool(b: bool) -> Self {
-        Self::atom(Value::bool(b))
-    }
-
-    pub fn int(n: i64) -> Self {
-        Self::atom(Value::int(n))
-    }
-
-    pub fn symbol<S: Into<String>>(s: S) -> Self {
-        Self::atom(Value::symbol(s))
-    }
-
-    pub fn cons(car: Self, cdr: Self) -> Self {
-        Self::Cons(Box::new(car), Box::new(cdr))
-    }
-
-    pub fn list(exprs: Vec<Self>) -> Self {
-        exprs
-            .into_iter()
-            .rfold(Self::nil(), |list, expr| Self::cons(expr, list))
-    }
-
     pub fn flatten(self) -> Option<Vec<Self>> {
         let mut exprs = Vec::new();
         let mut expr = self;
@@ -54,6 +24,36 @@ impl Expression {
             _ => None,
         }
     }
+}
+
+pub fn nil() -> Expression {
+    Expression::Nil
+}
+
+pub fn atom(v: Value) -> Expression {
+    Expression::Atom(v)
+}
+
+pub fn bool(b: bool) -> Expression {
+    atom(value::bool(b))
+}
+
+pub fn int(n: i64) -> Expression {
+    atom(value::int(n))
+}
+
+pub fn symbol<S: Into<String>>(s: S) -> Expression {
+    atom(value::symbol(s))
+}
+
+pub fn cons(car: Expression, cdr: Expression) -> Expression {
+    Expression::Cons(Box::new(car), Box::new(cdr))
+}
+
+pub fn list(exprs: Vec<Expression>) -> Expression {
+    exprs
+        .into_iter()
+        .rfold(nil(), |list, expr| cons(expr, list))
 }
 
 fn fmt_expression(expr: &Expression, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
@@ -83,36 +83,30 @@ impl fmt::Display for Expression {
 
 #[cfg(test)]
 mod tests {
-    use super::Expression;
+    use super::{cons, int, list, nil, symbol, Expression};
 
     fn simple_list_elems() -> Vec<Expression> {
-        vec![Expression::int(1), Expression::int(2)]
+        vec![int(1), int(2)]
     }
 
     fn simple_list() -> Expression {
-        Expression::list(simple_list_elems())
+        list(simple_list_elems())
     }
 
     fn incomplete_list() -> Expression {
-        Expression::cons(
-            Expression::int(1),
-            Expression::cons(Expression::int(2), Expression::int(3)),
-        )
+        cons(int(1), cons(int(2), int(3)))
     }
 
     fn let_expression_elems() -> Vec<Expression> {
         vec![
-            Expression::symbol("let"),
-            Expression::list(vec![Expression::list(vec![
-                Expression::symbol("a"),
-                Expression::int(2),
-            ])]),
-            Expression::list(vec![Expression::symbol("-"), Expression::symbol("a")]),
+            symbol("let"),
+            list(vec![list(vec![symbol("a"), int(2)])]),
+            list(vec![symbol("-"), symbol("a")]),
         ]
     }
 
     fn let_expression() -> Expression {
-        Expression::list(let_expression_elems())
+        list(let_expression_elems())
     }
 
     macro_rules! flatten_tests {
@@ -127,8 +121,8 @@ mod tests {
         }
     }
     flatten_tests! {
-        flatten_nil: (Some(vec![]), Expression::nil()),
-        flatten_atom: (None, Expression::symbol("x")),
+        flatten_nil: (Some(vec![]), nil()),
+        flatten_atom: (None, symbol("x")),
         flatten_simple_list: (Some(simple_list_elems()), simple_list()),
         flatten_incomplete_list: (None, incomplete_list()),
         flatten_let_expression: (Some(let_expression_elems()), let_expression()),
@@ -146,9 +140,9 @@ mod tests {
         }
     }
     display_tests! {
-        display_nil: ("()", Expression::nil()),
-        display_atom: ("x", Expression::symbol("x")),
-        display_cons: ("(() . 0)", Expression::cons(Expression::nil(), Expression::int(0))),
+        display_nil: ("()", nil()),
+        display_atom: ("x", symbol("x")),
+        display_cons: ("(() . 0)", cons(nil(), int(0))),
         display_simple_list: ("(1 2)", simple_list()),
         display_incomplete_list: ("(1 2 . 3)", incomplete_list()),
         display_let_expression: ("(let ((a 2)) (- a))", let_expression()),

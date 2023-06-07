@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::value::Value;
+use crate::value::{built_in_proc, Value};
 
 fn expect_numbers(values: Vec<Value>) -> Result<Vec<i64>, String> {
     values
@@ -39,32 +39,32 @@ fn built_in_arithmetic_operation<F: Fn(i64, i64) -> i64>(
 }
 
 pub fn built_in_add() -> Value {
-    Value::built_in_proc("+", |args: Vec<Value>| {
+    built_in_proc("+", |args: Vec<Value>| {
         built_in_arithmetic_operation("+", args, |x, y| x + y, 0, true)
     })
 }
 
 pub fn built_in_sub() -> Value {
-    Value::built_in_proc("-", |args: Vec<Value>| {
+    built_in_proc("-", |args: Vec<Value>| {
         built_in_arithmetic_operation("-", args, |x, y| x - y, 0, false)
     })
 }
 
 pub fn built_in_mul() -> Value {
-    Value::built_in_proc("*", |args: Vec<Value>| {
+    built_in_proc("*", |args: Vec<Value>| {
         built_in_arithmetic_operation("*", args, |x, y| x * y, 1, true)
     })
 }
 
 pub fn built_in_div() -> Value {
-    Value::built_in_proc("*", |args: Vec<Value>| {
+    built_in_proc("*", |args: Vec<Value>| {
         built_in_arithmetic_operation("/", args, |x, y| x / y, 1, false)
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{eval::eval, parser::parse, value::Value};
+    use crate::{eval::eval, parser::parse, value::int};
 
     #[test]
     fn eval_arithmetic_operators_test() {
@@ -87,7 +87,7 @@ mod tests {
         cases.into_iter().for_each(|(input, expected)| {
             let (_, expr) = parse(input).unwrap();
             let actual = eval(expr).unwrap();
-            assert_eq!(actual, Value::int(expected));
+            assert_eq!(actual, int(expected));
         });
     }
 }
