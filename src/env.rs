@@ -2,27 +2,23 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::value::Value;
 
-pub struct Env {
-    outer: Option<Rc<Env>>,
-    frame: RefCell<HashMap<String, Rc<Value>>>,
+type Frame = HashMap<String, Value>;
+
+pub struct EnvData {
+    outer: Option<Env>,
+    frame: RefCell<Frame>,
 }
+pub type Env = Rc<EnvData>;
 
-impl Env {
-    pub fn new() -> Env {
-        Env {
+impl EnvData {
+    pub fn new() -> Self {
+        Self {
             outer: None,
-            frame: RefCell::new(HashMap::new()),
+            frame: RefCell::new(Frame::new()),
         }
     }
 
-    pub fn extend(outer: Rc<Env>) -> Env {
-        Env {
-            outer: Some(outer.clone()),
-            frame: RefCell::new(HashMap::new()),
-        }
-    }
-
-    pub fn get<S: Into<String>>(&self, name: S) -> Option<Rc<Value>> {
+    pub fn get<S: Into<String>>(&self, name: S) -> Option<Value> {
         let name = name.into();
         self.frame.borrow().get(&name).map_or_else(
             || self.outer.as_ref().and_then(|env| env.get(name)),
@@ -30,30 +26,43 @@ impl Env {
         )
     }
 
-    pub fn set<S: Into<String>>(&self, name: S, value: Rc<Value>) {
+    pub fn set<S: Into<String>>(&self, name: S, value: Value) {
         self.frame.borrow_mut().insert(name.into(), value.clone());
     }
 }
 
+pub fn top() -> Env {
+    Rc::new(EnvData::new())
+}
+
+pub fn extend(outer: Env) -> Env {
+    Rc::new(EnvData {
+        outer: Some(outer.clone()),
+        frame: RefCell::new(Frame::new()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
-    use crate::value::{bool, int};
-
-    use super::Env;
+    use crate::{
+        env::{extend, top},
+        value::{bool, int},
+    };
 
     #[test]
     fn test() {
-        let env = Rc::new(Env::new());
-        env.set("x", Rc::new(int(32)));
+        let env = top();
+        env.set("x", int(32));
         env.get("x").map(|value| env.set("y", value));
-        assert_eq!(env.get("x"), Some(Rc::new(int(32))));
-        assert_eq!(env.get("y"), Some(Rc::new(int(32))));
+        assert_eq!(env.get("x"), Some(int(32)));
+        assert_eq!(env.get("y"), Some(int(32)));
 
-        let extended = Env::extend(env.clone());
-        extended.set("x", Rc::new(bool(true)));
-        assert_eq!(extended.get("x"), Some(Rc::new(bool(true))));
-        assert_eq!(extended.get("y"), Some(Rc::new(int(32))));
+        let extended = extend(env.clone());
+        extended.set("x", bool(true));
+        assert_eq!(extended.get("x"), Some(bool(true)));
+        assert_eq!(extended.get("y"), Some(int(32)));
+
+        assert_eq!(env.get("x"), Some(int(32)));
+        assert_eq!(env.get("y"), Some(int(32)));
     }
 }

@@ -3,6 +3,7 @@ mod parser;
 mod value;
 mod eval;
 mod built_in_procs;
+mod env;
 
 use std::{
     collections::VecDeque,
