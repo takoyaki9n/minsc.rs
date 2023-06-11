@@ -29,8 +29,8 @@ fn eval_if(mut cdrs: Vec<Expression>, env: &Env) -> Result<Value, String> {
     }
 }
 
-fn eval_args(args: Vec<Expression>, env: &Env) -> Result<Vec<Value>, String> {
-    args.into_iter().try_fold(Vec::new(), |mut values, expr| {
+fn eval_expressions(exprs: Vec<Expression>, env: &Env) -> Result<Vec<Value>, String> {
+    exprs.into_iter().try_fold(Vec::new(), |mut values, expr| {
         values.push(eval_expression(expr, env)?);
         Ok(values)
     })
@@ -38,7 +38,7 @@ fn eval_args(args: Vec<Expression>, env: &Env) -> Result<Vec<Value>, String> {
 
 fn eval_apply(car: Expression, cdrs: Vec<Expression>, env: &Env) -> Result<Value, String> {
     match *eval_expression(car, &env)? {
-        ValueData::BuiltInProc(_, func) => func(eval_args(cdrs, &env)?),
+        ValueData::BuiltInProc(_, proc) => proc(eval_expressions(cdrs, &env)?),
         _ => Err(format!("Eval Error: Invalid application.")),
     }
 }
@@ -59,7 +59,7 @@ pub fn eval_expression(expr: Expression, env: &Env) -> Result<Value, String> {
         Expression::Atom(value) => eval_atom(value, env),
         Expression::Cons(car, cdr) => {
             let cdrs = cdr
-                .flatten()
+                .to_vec()
                 .ok_or(format!("Syntax Error: proper list is expected."))?;
 
             match opt_symbol(&car) {

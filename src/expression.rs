@@ -10,7 +10,7 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn flatten(self) -> Option<Vec<Self>> {
+    pub fn to_vec(self) -> Option<Vec<Self>> {
         let mut exprs = Vec::new();
         let mut expr = self;
 
@@ -115,7 +115,7 @@ mod tests {
                 #[test]
                 fn $name() {
                     let (expected, input) = $case;
-                    assert_eq!(expected, input.flatten());
+                    assert_eq!(expected, input.to_vec());
                 }
             )*
         }
