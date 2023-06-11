@@ -38,7 +38,7 @@ fn eval_expressions(exprs: Vec<Expression>, env: &Env) -> Result<Vec<Value>, Str
 
 fn eval_apply(car: Expression, cdrs: Vec<Expression>, env: &Env) -> Result<Value, String> {
     match *eval_expression(car, &env)? {
-        ValueData::BuiltInProc(_, proc) => proc(eval_expressions(cdrs, &env)?),
+        ValueData::BuiltInProc { proc, .. } => proc(eval_expressions(cdrs, &env)?),
         _ => Err(format!("Eval Error: Invalid application.")),
     }
 }

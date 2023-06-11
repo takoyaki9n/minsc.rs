@@ -4,6 +4,7 @@ use crate::value::Value;
 
 type Frame = HashMap<String, Value>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvData {
     outer: Option<Env>,
     frame: RefCell<Frame>,

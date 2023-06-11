@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::value::{self, Value};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expression {
     Nil,
     Atom(Value),
