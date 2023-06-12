@@ -1,8 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::value::Value;
+use crate::expression::Expression;
 
-type Frame = HashMap<String, Value>;
+type Frame = HashMap<String, Expression>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvData {
@@ -19,7 +19,7 @@ impl EnvData {
         }
     }
 
-    pub fn get<S: Into<String>>(&self, name: S) -> Option<Value> {
+    pub fn get<S: Into<String>>(&self, name: S) -> Option<Expression> {
         let name = name.into();
         self.frame.borrow().get(&name).map_or_else(
             || self.outer.as_ref().and_then(|env| env.get(name)),
@@ -27,7 +27,7 @@ impl EnvData {
         )
     }
 
-    pub fn set<S: Into<String>>(&self, name: S, value: Value) {
+    pub fn set<S: Into<String>>(&self, name: S, value: Expression) {
         self.frame.borrow_mut().insert(name.into(), value.clone());
     }
 }
@@ -47,7 +47,7 @@ pub fn extend(outer: Env) -> Env {
 mod tests {
     use crate::{
         env::{extend, top},
-        value::{bool, int},
+        expression::{bool, int},
     };
 
     #[test]

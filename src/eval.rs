@@ -1,76 +1,74 @@
+use std::collections::VecDeque;
+
 use crate::{
     built_in_procs::numbers::define_procs,
     env::{top, Env},
-    expression::Expression,
-    value::{Value, ValueData},
+    expression::{to_vec, undef, Expression, ExpressionData},
+    value::Value,
 };
 
-fn eval_atom(value: Value, env: &Env) -> Result<Value, String> {
-    match value.as_ref() {
-        ValueData::Symbol(sym) => env
-            .get(sym)
-            .ok_or(format!("Eval Error: undefined variable: {}", sym)),
-        _ => Ok(value.clone()),
-    }
+fn eval_symbol(symbol: &str, env: &Env) -> Result<Expression, String> {
+    env.get(symbol)
+        .ok_or(format!("Eval Error: undefined variable: {}", symbol))
 }
 
-fn eval_if(mut cdrs: Vec<Expression>, env: &Env) -> Result<Value, String> {
-    if cdrs.len() != 3 {
-        Err(format!("Syntax Error: malformed if."))
-    } else {
-        let e_else = cdrs.pop().unwrap();
-        let e_then = cdrs.pop().unwrap();
-        let e_cond = cdrs.pop().unwrap();
+fn eval_if(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
+    if exprs.len() == 2 || exprs.len() == 3 {
+        let mut exprs = VecDeque::from(exprs);
+        let predicate = exprs.pop_front().unwrap();
+        let consequent = exprs.pop_front().unwrap();
 
-        match *eval_expression(e_cond, env)? {
-            ValueData::Bool(false) => eval_expression(e_else, env),
-            _ => eval_expression(e_then, env),
+        match *eval_expression(predicate, env)? {
+            ExpressionData::Atom(Value::Bool(false)) => exprs
+                .pop_front()
+                .map_or(Ok(undef()), |alternative| eval_expression(alternative, env)),
+            _ => eval_expression(consequent, env),
         }
+    } else {
+        Err(format!("Syntax Error: malformed if"))
     }
 }
 
-fn eval_expressions(exprs: Vec<Expression>, env: &Env) -> Result<Vec<Value>, String> {
+fn eval_expressions(exprs: Vec<Expression>, env: &Env) -> Result<Vec<Expression>, String> {
     exprs.into_iter().try_fold(Vec::new(), |mut values, expr| {
         values.push(eval_expression(expr, env)?);
         Ok(values)
     })
 }
 
-fn eval_apply(car: Expression, cdrs: Vec<Expression>, env: &Env) -> Result<Value, String> {
+fn eval_apply(car: Expression, cdrs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
     match *eval_expression(car, &env)? {
-        ValueData::BuiltInProc { proc, .. } => proc(eval_expressions(cdrs, &env)?),
+        ExpressionData::Atom(Value::BuiltInProc { proc, .. }) => {
+            proc(eval_expressions(cdrs, &env)?)
+        }
         _ => Err(format!("Eval Error: Invalid application.")),
     }
 }
 
 fn opt_symbol(expr: &Expression) -> Option<&str> {
-    match expr {
-        Expression::Atom(value) => match value.as_ref() {
-            ValueData::Symbol(sym) => Some(sym.as_str()),
-            _ => None,
-        },
+    match expr.as_ref() {
+        ExpressionData::Atom(Value::Symbol(symbol)) => Some(symbol),
         _ => None,
     }
 }
 
-pub fn eval_expression(expr: Expression, env: &Env) -> Result<Value, String> {
-    match expr {
-        Expression::Nil => Err(format!("TODO: Eval \"{}\"", expr)),
-        Expression::Atom(value) => eval_atom(value, env),
-        Expression::Cons(car, cdr) => {
-            let cdrs = cdr
-                .to_vec()
-                .ok_or(format!("Syntax Error: proper list is expected."))?;
+pub fn eval_expression(expr: Expression, env: &Env) -> Result<Expression, String> {
+    match expr.as_ref() {
+        ExpressionData::Nil => Ok(expr),
+        ExpressionData::Atom(Value::Symbol(symbol)) => eval_symbol(symbol.as_str(), env),
+        ExpressionData::Atom(_) => Ok(expr),
+        ExpressionData::Cons(car, cdr) => {
+            let cdrs = to_vec(cdr.clone()).ok_or(format!("Syntax Error: proper list is expected."))?;
 
-            match opt_symbol(&car) {
-                Some("if") => eval_if(cdrs, env),
-                _ => eval_apply(*car, cdrs, env),
+            match car.as_ref() {
+                ExpressionData::Atom(Value::Symbol(s)) if s == "if" => eval_if(cdrs, env),
+                _ => eval_apply(car.clone(), cdrs, env),
             }
         }
     }
 }
 
-pub fn eval(expr: Expression) -> Result<Value, String> {
+pub fn eval(expr: Expression) -> Result<Expression, String> {
     let env = top();
     define_procs(&env);
 
@@ -80,7 +78,7 @@ pub fn eval(expr: Expression) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::eval;
-    use crate::{parser::parse, value::int};
+    use crate::{parser::parse, expression::int};
 
     #[test]
     fn eval_if_test() {

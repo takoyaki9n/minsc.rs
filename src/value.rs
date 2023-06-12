@@ -1,16 +1,16 @@
-use std::{fmt, rc::Rc};
+use std::fmt;
 
 use crate::{env::Env, expression::Expression};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ValueData {
+pub enum Value {
     Undef,
     Bool(bool),
     Int(i64),
     Symbol(String),
     BuiltInProc {
         name: String,
-        proc: fn(Vec<Value>) -> Result<Value, String>,
+        proc: fn(Vec<Expression>) -> Result<Expression, String>,
     },
     Closure {
         params: Vec<String>,
@@ -18,43 +18,42 @@ pub enum ValueData {
         env: Env,
     },
 }
-pub type Value = Rc<ValueData>;
 
 pub fn undef() -> Value {
-    Rc::new(ValueData::Undef)
+    Value::Undef
 }
 
 pub fn bool(b: bool) -> Value {
-    Rc::new(ValueData::Bool(b))
+    Value::Bool(b)
 }
 
 pub fn int(n: i64) -> Value {
-    Rc::new(ValueData::Int(n))
+    Value::Int(n)
 }
 
 pub fn symbol<S: Into<String>>(s: S) -> Value {
-    Rc::new(ValueData::Symbol(s.into()))
+    Value::Symbol(s.into())
 }
 
 pub fn built_in_proc<S: Into<String>>(
     name: S,
-    proc: fn(Vec<Value>) -> Result<Value, String>,
+    proc: fn(Vec<Expression>) -> Result<Expression, String>,
 ) -> Value {
-    Rc::new(ValueData::BuiltInProc {
+    Value::BuiltInProc {
         name: name.into(),
         proc,
-    })
+    }
 }
 
 pub fn closure(params: Vec<String>, body: Vec<Expression>, env: &Env) -> Value {
-    Rc::new(ValueData::Closure {
+    Value::Closure {
         params,
         body,
         env: env.clone(),
-    })
+    }
 }
 
-impl fmt::Display for ValueData {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Undef => write!(f, "<Undef>"),
@@ -72,18 +71,13 @@ impl fmt::Display for ValueData {
 mod tests {
     use crate::{
         env,
-        expression::nil,
-        value::{built_in_proc, closure, undef},
+        expression::{nil, Expression},
     };
 
-    use super::{bool, int, symbol, Value};
+    use super::{bool, built_in_proc, closure, int, symbol, undef};
 
-    fn proc_foo(args: Vec<Value>) -> Result<Value, String> {
-        Ok(int(args.len().try_into().unwrap()))
-    }
-
-    fn closure_bar() -> Value {
-        closure(vec![format!("x"), format!("y")], vec![nil()], &env::top())
+    fn proc_foo(args: Vec<Expression>) -> Result<Expression, String> {
+        Ok(nil())
     }
 
     #[test]
@@ -95,6 +89,7 @@ mod tests {
         assert_eq!(format!("{}", symbol("x")), "x");
         let foo = built_in_proc("foo", proc_foo);
         assert_eq!(format!("{}", foo), "<Built-In-Proc: foo>");
-        assert_eq!(format!("{}", closure_bar()), "<Closure (x, y)>");
+        let bar = closure(vec![format!("x"), format!("y")], vec![nil()], &env::top());
+        assert_eq!(format!("{}", bar), "<Closure (x, y)>");
     }
 }

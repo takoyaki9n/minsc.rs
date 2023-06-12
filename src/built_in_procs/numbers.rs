@@ -2,29 +2,30 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    value::{built_in_proc, int, Value, ValueData},
+    expression::{int,built_in_proc, Expression, ExpressionData},
+    value::{Value},
 };
 
-fn expect_numbers(values: Vec<Value>) -> Result<Vec<i64>, String> {
+fn expect_numbers(name: &str, values: Vec<Expression>) -> Result<Vec<i64>, String> {
     values
         .into_iter()
-        .try_fold(Vec::new(), |mut numbers, value| match *value {
-            ValueData::Int(n) => {
-                numbers.push(n);
+        .try_fold(Vec::new(), |mut numbers, expr| match *expr {
+            ExpressionData::Atom(Value::Int(number)) => {
+                numbers.push(number);
                 Ok(numbers)
             }
-            _ => Err(format!("Type Error: Number expected: {}", value)),
+            _ => Err(format!("Type Error: number expected: {}", name)),
         })
 }
 
 fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     name: &str,
-    args: Vec<Value>,
+    args: Vec<Expression>,
     op: F,
     unit: i64,
     commutative: bool,
-) -> Result<Value, String> {
-    let numbers = expect_numbers(args)?;
+) -> Result<Expression, String> {
+    let numbers = expect_numbers(name, args)?;
     if commutative {
         Ok(int(numbers.into_iter().fold(unit, op)))
     } else {
@@ -44,19 +45,19 @@ fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     }
 }
 
-fn proc_add(args: Vec<Value>) -> Result<Value, String> {
+fn proc_add(args: Vec<Expression>) -> Result<Expression, String> {
     calc_arithmetic_operation("+", args, |x, y| x + y, 0, true)
 }
 
-fn proc_sub(args: Vec<Value>) -> Result<Value, String> {
+fn proc_sub(args: Vec<Expression>) -> Result<Expression, String> {
     calc_arithmetic_operation("-", args, |x, y| x - y, 0, false)
 }
 
-fn proc_mul(args: Vec<Value>) -> Result<Value, String> {
+fn proc_mul(args: Vec<Expression>) -> Result<Expression, String> {
     calc_arithmetic_operation("*", args, |x, y| x * y, 1, true)
 }
 
-fn proc_div(args: Vec<Value>) -> Result<Value, String> {
+fn proc_div(args: Vec<Expression>) -> Result<Expression, String> {
     calc_arithmetic_operation("/", args, |x, y| x / y, 1, false)
 }
 
@@ -69,13 +70,17 @@ pub fn define_procs(env: &Env) {
 
 #[cfg(test)]
 mod tests {
-    use crate::value::{bool, int, Value};
+    use crate::expression::{bool, int, Expression};
 
     use super::{proc_add, proc_div, proc_mul, proc_sub};
 
     #[test]
     fn eval_arithmetic_operators_test() {
-        type Case = (fn(Vec<Value>) -> Result<Value, String>, Vec<i64>, i64);
+        type Case = (
+            fn(Vec<Expression>) -> Result<Expression, String>,
+            Vec<i64>,
+            i64,
+        );
         let cases: Vec<Case> = vec![
             (proc_add, vec![], 0),
             (proc_add, vec![10], 10),
@@ -101,7 +106,10 @@ mod tests {
 
     #[test]
     fn eval_arithmetic_operators_error_test() {
-        type Case = (fn(Vec<Value>) -> Result<Value, String>, Vec<Value>);
+        type Case = (
+            fn(Vec<Expression>) -> Result<Expression, String>,
+            Vec<Expression>,
+        );
         let cases: Vec<Case> = vec![
             (proc_add, vec![int(2), bool(false)]),
             (proc_sub, vec![]),
