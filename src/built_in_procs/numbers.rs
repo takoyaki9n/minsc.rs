@@ -2,8 +2,8 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    expression::{int,built_in_proc, Expression, ExpressionData},
-    value::{Value},
+    expression::{built_in_proc, int, Expression, ExpressionData},
+    value::Value,
 };
 
 fn expect_numbers(name: &str, values: Vec<Expression>) -> Result<Vec<i64>, String> {

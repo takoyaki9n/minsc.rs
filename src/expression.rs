@@ -1,6 +1,6 @@
 use std::{fmt, rc::Rc};
 
-use crate::value::{self, Value};
+use crate::{env::Env, value::Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionData {
@@ -19,26 +19,37 @@ pub fn atom(v: Value) -> Expression {
 }
 
 pub fn undef() -> Expression {
-    atom(value::undef())
+    atom(Value::Undef)
 }
 
 pub fn bool(b: bool) -> Expression {
-    atom(value::bool(b))
+    atom(Value::Bool(b))
 }
 
 pub fn int(n: i64) -> Expression {
-    atom(value::int(n))
+    atom(Value::Int(n))
 }
 
 pub fn symbol<S: Into<String>>(s: S) -> Expression {
-    atom(value::symbol(s))
+    atom(Value::Symbol(s.into()))
 }
 
 pub fn built_in_proc<S: Into<String>>(
     name: S,
     proc: fn(Vec<Expression>) -> Result<Expression, String>,
 ) -> Expression {
-    atom(value::built_in_proc(name, proc))
+    atom(Value::BuiltInProc {
+        name: name.into(),
+        proc,
+    })
+}
+
+pub fn closure(params: Vec<String>, body: Vec<Expression>, env: &Env) -> Expression {
+    atom(Value::Closure {
+        params,
+        body,
+        env: env.clone(),
+    })
 }
 
 pub fn cons(car: Expression, cdr: Expression) -> Expression {
@@ -96,17 +107,23 @@ mod tests {
 
     #[test]
     fn display_test() {
-        assert_eq!(format!("{}", nil()), "()");
-        assert_eq!(format!("{}", symbol("x")), "x");
-        assert_eq!(format!("{}", cons(nil(), bool(true))), "(() . #t)");
-        assert_eq!(format!("{}", list(vec![int(1), int(2)])), "(1 2)");
-        let expr = cons(int(1), cons(int(2), int(3)));
-        assert_eq!(format!("{}", expr), "(1 2 . 3)");
-        let expr = list(vec![
-            symbol("let"),
-            list(vec![list(vec![symbol("a"), int(2)])]),
-            list(vec![symbol("-"), symbol("a")]),
-        ]);
-        assert_eq!(format!("{}", expr), "(let ((a 2)) (- a))");
+        let cases = vec![
+            (nil(), "()"),
+            (symbol("x"), "x"),
+            (cons(nil(), bool(true)), "(() . #t)"),
+            (list(vec![int(1), int(2)]), "(1 2)"),
+            (cons(int(1), cons(int(2), int(3))), "(1 2 . 3)"),
+            (
+                list(vec![
+                    symbol("let"),
+                    list(vec![list(vec![symbol("a"), int(2)])]),
+                    list(vec![symbol("-"), symbol("a")]),
+                ]),
+                "(let ((a 2)) (- a))",
+            ),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(format!("{}", input), expected)
+        }
     }
 }
