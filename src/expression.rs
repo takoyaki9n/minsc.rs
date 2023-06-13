@@ -92,34 +92,21 @@ impl fmt::Display for ExpressionData {
 
 #[cfg(test)]
 mod tests {
-    use super::{cons, int, list, nil, symbol, Expression};
+    use super::{bool, cons, int, list, nil, symbol};
 
-    fn let_expression() -> Expression {
-        list(vec![
+    #[test]
+    fn display_test() {
+        assert_eq!(format!("{}", nil()), "()");
+        assert_eq!(format!("{}", symbol("x")), "x");
+        assert_eq!(format!("{}", cons(nil(), bool(true))), "(() . #t)");
+        assert_eq!(format!("{}", list(vec![int(1), int(2)])), "(1 2)");
+        let expr = cons(int(1), cons(int(2), int(3)));
+        assert_eq!(format!("{}", expr), "(1 2 . 3)");
+        let expr = list(vec![
             symbol("let"),
             list(vec![list(vec![symbol("a"), int(2)])]),
             list(vec![symbol("-"), symbol("a")]),
-        ])
-    }
-
-    macro_rules! display_tests {
-        ($($name: ident: $case: expr,)*) => {
-            $(
-                #[test]
-                fn $name() {
-                    let (expected, input) = $case;
-                    assert_eq!(expected, format!("{}", input));
-                }
-            )*
-        }
-    }
-
-    display_tests! {
-        display_nil: ("()", nil()),
-        display_atom: ("x", symbol("x")),
-        display_cons: ("(() . 0)", cons(nil(), int(0))),
-        display_simple_list: ("(1 2)", list(vec![int(1), int(2)])),
-        display_incomplete_list: ("(1 2 . 3)", cons(int(1), cons(int(2), int(3)))),
-        display_let_expression: ("(let ((a 2)) (- a))", let_expression()),
+        ]);
+        assert_eq!(format!("{}", expr), "(let ((a 2)) (- a))");
     }
 }
