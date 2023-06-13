@@ -36,7 +36,7 @@ pub fn top() -> Env {
     Rc::new(EnvData::new())
 }
 
-pub fn extend(outer: Env) -> Env {
+pub fn extend(outer: &Env) -> Env {
     Rc::new(EnvData {
         outer: Some(outer.clone()),
         frame: RefCell::new(Frame::new()),
@@ -58,7 +58,7 @@ mod tests {
         assert_eq!(env.get("x"), Some(int(32)));
         assert_eq!(env.get("y"), Some(int(32)));
 
-        let extended = extend(env.clone());
+        let extended = extend(&env);
         extended.set("x", bool(true));
         assert_eq!(extended.get("x"), Some(bool(true)));
         assert_eq!(extended.get("y"), Some(int(32)));
