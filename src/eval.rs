@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     built_in_procs::numbers::define_procs,
-    env::{top, Env, extend},
+    env::{extend, top, Env},
     expression::{closure, to_vec, undef, Expression, ExpressionData},
     value::Value,
 };
@@ -11,6 +11,13 @@ fn opt_symbol(expr: &Expression) -> Option<&str> {
     match expr.as_ref() {
         ExpressionData::Atom(Value::Symbol(symbol)) => Some(symbol),
         _ => None,
+    }
+}
+
+fn expect_symbol(expr: Expression) -> Result<String, String> {
+    match expr.as_ref() {
+        ExpressionData::Atom(Value::Symbol(symbol)) => Ok(symbol.clone()),
+        _ => Err(format!("Syntax Error: proper list is expected.")),
     }
 }
 
@@ -42,17 +49,43 @@ fn eval_lambda(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> 
     let formals = exprs
         .pop_front()
         .map_or(Err(format!("Syntax Error: malformed labbda")), expect_list)?;
-    let params = formals
-        .into_iter()
-        .try_fold(Vec::new(), |mut params, expr| match expr.as_ref() {
-            ExpressionData::Atom(Value::Symbol(param)) => {
-                params.push(param.to_string());
-                Ok(params)
-            }
-            _ => Err(format!("Syntax Error: string expected")),
-        })?;
+    let params = formals.into_iter().try_fold(
+        vec![],
+        |mut params, expr| -> Result<Vec<String>, String> {
+            params.push(expect_symbol(expr)?);
+            Ok(params)
+        },
+    )?;
 
     Ok(closure(params, exprs.into(), env))
+}
+
+fn eval_let(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
+    let mut exprs = VecDeque::from(exprs);
+
+    let inits = exprs
+        .pop_front()
+        .map_or(Err(format!("Syntax Error: malformed let")), expect_list)?
+        .into_iter()
+        .try_fold(vec![], |mut inits, expr| {
+            let mut pair = expect_list(expr)?;
+            if pair.len() != 2 {
+                return Err(format!("Syntax Error: malformed let"));
+            }
+
+            let arg = pair.pop().unwrap();
+            let param = expect_symbol(pair.pop().unwrap())?;
+            inits.push((param, arg));
+            Ok(inits)
+        })?;
+    
+    let extended = extend(env);
+    for (param, arg) in inits {
+        extended.set(param, eval_expression(arg, env)?);
+    }
+
+    exprs.into_iter()
+    .try_fold(undef(), |_, expr| eval_expression(expr, &extended))
 }
 
 fn eval_closure(
@@ -76,21 +109,20 @@ fn eval_closure(
         env.set(param, value);
     }
 
-    body.into_iter().try_fold(undef(), |_, expr| {
-        eval_expression(expr, &env)
-    })
+    body.into_iter()
+        .try_fold(undef(), |_, expr| eval_expression(expr, &env))
 }
 
-fn eval_apply(car: Expression, cdrs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    match eval_expression(car, &env)?.as_ref() {
+fn eval_apply(proc: Expression, exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
+    match eval_expression(proc, &env)?.as_ref() {
         ExpressionData::Atom(Value::BuiltInProc { proc, .. }) => {
-            proc(eval_expressions(cdrs, &env)?)
+            proc(eval_expressions(exprs, &env)?)
         }
         ExpressionData::Atom(Value::Closure {
             params,
             body,
             env: closing,
-        }) => eval_closure(params.clone(), body.clone(), closing, cdrs, env),
+        }) => eval_closure(params.clone(), body.clone(), closing, exprs, env),
         _ => Err(format!("Eval Error: Invalid application")),
     }
 }
@@ -118,6 +150,7 @@ fn eval_expression(expr: Expression, env: &Env) -> Result<Expression, String> {
             match opt_symbol(&car) {
                 Some("if") => eval_if(exprs, env),
                 Some("lambda") => eval_lambda(exprs, env),
+                Some("let") => eval_let(exprs, env),
                 _ => eval_apply(car.clone(), exprs, env),
             }
         }
@@ -173,5 +206,12 @@ mod tests {
         let (_, expr) = parse("((lambda (x y) (+ (* x x) (* y y))) 3 4)").unwrap();
         let value = eval(expr).unwrap();
         assert_eq!(value, int(25));
+    }
+
+    #[test]
+    fn eval_let_test() {
+        let (_, expr) = parse("(let ((a 2) (b 3)) (+ a b))").unwrap();
+        let value = eval(expr).unwrap();
+        assert_eq!(value, int(5));
     }
 }
