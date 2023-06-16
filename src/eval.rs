@@ -1,54 +1,39 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
     built_in_procs::numbers::define_procs,
     env::{extend, top, Env},
-    expression::{closure, to_vec, undef, Expression, ExpressionData},
+    expression::{closure, undef, Expression, ExpressionData},
     value::Value,
 };
 
-fn opt_symbol(expr: &Expression) -> Option<&str> {
-    match expr.as_ref() {
-        ExpressionData::Atom(Value::Symbol(symbol)) => Some(symbol),
-        _ => None,
+fn opt_symbol(expr: &ExpressionData) -> Option<&str> {
+    if let ExpressionData::Atom(Value::Symbol(symbol)) = expr {
+        Some(symbol.as_str())
+    } else {
+        None
     }
 }
 
 fn expect_symbol(expr: Expression) -> Result<String, String> {
     match expr.as_ref() {
         ExpressionData::Atom(Value::Symbol(symbol)) => Ok(symbol.clone()),
-        _ => Err(format!("Syntax Error: proper list is expected.")),
+        _ => Err("Syntax Error: proper list is expected.".to_string()),
     }
 }
 
 fn expect_list(expr: Expression) -> Result<Vec<Expression>, String> {
-    to_vec(expr).ok_or(format!("Syntax Error: proper list is expected."))
+    expr.to_vec()
+        .ok_or("Syntax Error: proper list is expected.".to_string())
 }
 
-fn eval_if(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    let len = exprs.len();
-    if len < 2 || 3 < len {
-        return Err(format!("Syntax Error: malformed if"));
-    }
-
-    let mut exprs = VecDeque::from(exprs);
-    let predicate = exprs.pop_front().unwrap();
-    let consequent = exprs.pop_front().unwrap();
-
-    match *eval_expression(predicate, env)? {
-        ExpressionData::Atom(Value::Bool(false)) => exprs
-            .pop_front()
-            .map_or(Ok(undef()), |alternative| eval_expression(alternative, env)),
-        _ => eval_expression(consequent, env),
-    }
-}
-
-fn eval_lambda(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
+fn eval_lambda(exprs: Vec<Expression>, env: Env) -> Result<Expression, String> {
     let mut exprs = VecDeque::from(exprs);
 
-    let formals = exprs
-        .pop_front()
-        .map_or(Err(format!("Syntax Error: malformed labbda")), expect_list)?;
+    let formals = exprs.pop_front().map_or(
+        Err("Syntax Error: malformed labbda".to_string()),
+        expect_list,
+    )?;
     let params = formals.into_iter().try_fold(
         vec![],
         |mut params, expr| -> Result<Vec<String>, String> {
@@ -57,20 +42,20 @@ fn eval_lambda(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> 
         },
     )?;
 
-    Ok(closure(params, exprs.into(), env))
+    Ok(closure(params, exprs.into(), Rc::clone(&env)))
 }
 
-fn eval_let(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
+fn eval_let(exprs: Vec<Expression>, env: Env) -> Result<Expression, String> {
     let mut exprs = VecDeque::from(exprs);
 
     let inits = exprs
         .pop_front()
-        .map_or(Err(format!("Syntax Error: malformed let")), expect_list)?
+        .map_or(Err("Syntax Error: malformed let".to_string()), expect_list)?
         .into_iter()
         .try_fold(vec![], |mut inits, expr| {
             let mut pair = expect_list(expr)?;
             if pair.len() != 2 {
-                return Err(format!("Syntax Error: malformed let"));
+                return Err("Syntax Error: malformed let".to_string());
             }
 
             let arg = pair.pop().unwrap();
@@ -78,22 +63,23 @@ fn eval_let(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
             inits.push((param, arg));
             Ok(inits)
         })?;
-    
-    let extended = extend(env);
+
+    let extended = extend(Rc::clone(&env));
     for (param, arg) in inits {
-        extended.set(param, eval_expression(arg, env)?);
+        extended.set(param, eval_expression(arg, Rc::clone(&env))?);
     }
 
-    exprs.into_iter()
-    .try_fold(undef(), |_, expr| eval_expression(expr, &extended))
+    exprs.into_iter().try_fold(undef(), |_, expr| {
+        eval_expression(expr, Rc::clone(&extended))
+    })
 }
 
 fn eval_closure(
     params: Vec<String>,
     body: Vec<Expression>,
-    closing: &Env,
+    closing: Env,
     args: Vec<Expression>,
-    invocation: &Env,
+    invocation: Env,
 ) -> Result<Expression, String> {
     if params.len() != args.len() {
         return Err(format!(
@@ -103,41 +89,59 @@ fn eval_closure(
         ));
     }
 
-    let env = extend(closing);
+    let extended = extend(closing);
     for (param, arg) in params.into_iter().zip(args.into_iter()) {
-        let value = eval_expression(arg, invocation)?;
-        env.set(param, value);
+        let value = eval_expression(arg, Rc::clone(&invocation))?;
+        extended.set(param, value);
     }
 
-    body.into_iter()
-        .try_fold(undef(), |_, expr| eval_expression(expr, &env))
+    body.into_iter().try_fold(undef(), |_, expr| {
+        eval_expression(expr, Rc::clone(&extended))
+    })
 }
 
-fn eval_apply(proc: Expression, exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    match eval_expression(proc, &env)?.as_ref() {
+fn eval_apply(proc: Expression, exprs: Vec<Expression>, env: Env) -> Result<Expression, String> {
+    match eval_expression(proc, Rc::clone(&env))?.as_ref() {
         ExpressionData::Atom(Value::BuiltInProc { proc, .. }) => {
-            proc(eval_expressions(exprs, &env)?)
+            proc(eval_expressions(exprs, env)?)
         }
         ExpressionData::Atom(Value::Closure {
             params,
             body,
             env: closing,
-        }) => eval_closure(params.clone(), body.clone(), closing, exprs, env),
-        _ => Err(format!("Eval Error: Invalid application")),
+        }) => eval_closure(params.clone(), body.clone(), Rc::clone(closing), exprs, env),
+        _ => Err("Eval Error: Invalid application".to_string()),
     }
 }
 
-fn eval_expressions<T>(exprs: T, env: &Env) -> Result<Vec<Expression>, String>
+fn eval_if(exprs: Vec<Expression>, env: Env) -> Result<Expression, String> {
+    if !(2..=3).contains(&exprs.len()) {
+        return Err("Syntax Error: malformed if".to_string());
+    }
+
+    let mut exprs = VecDeque::from(exprs);
+    let predicate = exprs.pop_front().unwrap();
+    let consequent = exprs.pop_front().unwrap();
+
+    match eval_expression(predicate, Rc::clone(&env))?.as_ref() {
+        ExpressionData::Atom(Value::Bool(false)) => exprs
+            .pop_front()
+            .map_or(Ok(undef()), |alternative| eval_expression(alternative, env)),
+        _ => eval_expression(consequent, env),
+    }
+}
+
+fn eval_expressions<T>(exprs: T, env: Env) -> Result<Vec<Expression>, String>
 where
     T: IntoIterator<Item = Expression>,
 {
     exprs.into_iter().try_fold(Vec::new(), |mut values, expr| {
-        values.push(eval_expression(expr, env)?);
+        values.push(eval_expression(expr, Rc::clone(&env))?);
         Ok(values)
     })
 }
 
-fn eval_expression(expr: Expression, env: &Env) -> Result<Expression, String> {
+fn eval_expression(expr: Expression, env: Env) -> Result<Expression, String> {
     match expr.as_ref() {
         ExpressionData::Nil => Ok(expr),
         ExpressionData::Atom(Value::Symbol(symbol)) => env
@@ -147,10 +151,10 @@ fn eval_expression(expr: Expression, env: &Env) -> Result<Expression, String> {
         ExpressionData::Cons(car, cdr) => {
             let exprs = expect_list(cdr.clone())?;
 
-            match opt_symbol(&car) {
-                Some("if") => eval_if(exprs, env),
+            match opt_symbol(car) {
                 Some("lambda") => eval_lambda(exprs, env),
                 Some("let") => eval_let(exprs, env),
+                Some("if") => eval_if(exprs, env),
                 _ => eval_apply(car.clone(), exprs, env),
             }
         }
@@ -161,7 +165,7 @@ pub fn eval(expr: Expression) -> Result<Expression, String> {
     let env = top();
     define_procs(&env);
 
-    eval_expression(expr, &env)
+    eval_expression(expr, env)
 }
 
 #[cfg(test)]

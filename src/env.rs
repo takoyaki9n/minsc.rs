@@ -28,7 +28,7 @@ impl EnvData {
     }
 
     pub fn set<S: Into<String>>(&self, name: S, value: Expression) {
-        self.frame.borrow_mut().insert(name.into(), value.clone());
+        self.frame.borrow_mut().insert(name.into(), value);
     }
 }
 
@@ -36,15 +36,17 @@ pub fn top() -> Env {
     Rc::new(EnvData::new())
 }
 
-pub fn extend(outer: &Env) -> Env {
+pub fn extend(outer: Env) -> Env {
     Rc::new(EnvData {
-        outer: Some(outer.clone()),
+        outer: Some(outer),
         frame: RefCell::new(Frame::new()),
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use crate::{
         env::{extend, top},
         expression::{bool, int},
@@ -54,11 +56,13 @@ mod tests {
     fn test() {
         let env = top();
         env.set("x", int(32));
-        env.get("x").map(|value| env.set("y", value));
+        if let Some(value) = env.get("x") {
+            env.set("y", value)
+        }
         assert_eq!(env.get("x"), Some(int(32)));
         assert_eq!(env.get("y"), Some(int(32)));
 
-        let extended = extend(&env);
+        let extended = extend(Rc::clone(&env));
         extended.set("x", bool(true));
         assert_eq!(extended.get("x"), Some(bool(true)));
         assert_eq!(extended.get("y"), Some(int(32)));

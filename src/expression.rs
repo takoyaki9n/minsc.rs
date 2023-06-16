@@ -10,6 +10,23 @@ pub enum ExpressionData {
 }
 pub type Expression = Rc<ExpressionData>;
 
+impl ExpressionData {
+    pub fn to_vec(&self) -> Option<Vec<Expression>> {
+        let mut exprs = vec![];
+        let mut expr = self;
+        while let Self::Cons(car, cdr) = expr {
+            exprs.push(Rc::clone(car));
+
+            expr = cdr.as_ref();
+        }
+
+        match expr {
+            Self::Nil => Some(exprs),
+            _ => None,
+        }
+    }
+}
+
 pub fn nil() -> Expression {
     Rc::new(ExpressionData::Nil)
 }
@@ -44,36 +61,18 @@ pub fn built_in_proc<S: Into<String>>(
     })
 }
 
-pub fn closure(params: Vec<String>, body: Vec<Expression>, env: &Env) -> Expression {
-    atom(Value::Closure {
-        params,
-        body,
-        env: env.clone(),
-    })
+pub fn closure(params: Vec<String>, body: Vec<Expression>, env: Env) -> Expression {
+    atom(Value::Closure { params, body, env })
 }
 
 pub fn cons(car: Expression, cdr: Expression) -> Expression {
-    Rc::new(ExpressionData::Cons(car.clone(), cdr.clone()))
+    Rc::new(ExpressionData::Cons(car, cdr))
 }
 
 pub fn list(exprs: Vec<Expression>) -> Expression {
     exprs
         .into_iter()
         .rfold(nil(), |list, expr| cons(expr, list))
-}
-
-pub fn to_vec(mut expr: Expression) -> Option<Vec<Expression>> {
-    let mut exprs = Vec::new();
-
-    while let ExpressionData::Cons(car, cdr) = expr.as_ref() {
-        exprs.push(car.clone());
-        expr = cdr.clone();
-    }
-
-    match *expr {
-        ExpressionData::Nil => Some(exprs),
-        _ => None,
-    }
 }
 
 fn fmt_expression(expr: &ExpressionData, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
@@ -90,7 +89,7 @@ fn fmt_expression(expr: &ExpressionData, f: &mut fmt::Formatter<'_>, is_cdr: boo
             if *cdr.as_ref() != ExpressionData::Nil {
                 write!(f, " ")?;
             }
-            fmt_expression(&cdr, f, true)
+            fmt_expression(cdr.as_ref(), f, true)
         }
     }
 }

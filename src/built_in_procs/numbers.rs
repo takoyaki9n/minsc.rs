@@ -31,7 +31,7 @@ fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     } else {
         let mut numbers = VecDeque::from_iter(numbers);
         if let Some(first) = numbers.pop_front() {
-            if numbers.len() == 0 {
+            if numbers.is_empty() {
                 Ok(int(op(unit, first)))
             } else {
                 Ok(int(numbers.into_iter().fold(first, op)))
@@ -98,7 +98,7 @@ mod tests {
             (proc_div, vec![1000, 5, 2, 10], 10),
         ];
         cases.into_iter().for_each(|(proc, operands, expected)| {
-            let values = operands.into_iter().map(|n| int(n)).collect();
+            let values = operands.into_iter().map(int).collect();
             let actual = proc(values).unwrap();
             assert_eq!(actual, int(expected));
         });
