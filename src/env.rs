@@ -12,14 +12,14 @@ pub struct EnvData {
 pub type Env = Rc<EnvData>;
 
 impl EnvData {
-    pub fn new() -> Self {
+    pub fn new(outer: Option<Env>, frame: Option<Frame>) -> Self {
         Self {
-            outer: None,
-            frame: RefCell::new(Frame::new()),
+            outer,
+            frame: RefCell::new(frame.unwrap_or_default()),
         }
     }
 
-    pub fn get<S: Into<String>>(&self, name: S) -> Option<Expression> {
+    pub fn get(&self, name: impl Into<String>) -> Option<Expression> {
         let name = name.into();
         self.frame.borrow().get(&name).map_or_else(
             || self.outer.as_ref().and_then(|env| env.get(name)),
@@ -27,34 +27,36 @@ impl EnvData {
         )
     }
 
-    pub fn set<S: Into<String>>(&self, name: S, value: Expression) {
+    pub fn set(&self, name: impl Into<String>, value: Expression) {
         self.frame.borrow_mut().insert(name.into(), value);
     }
 }
 
-pub fn top() -> Env {
-    Rc::new(EnvData::new())
+pub trait EnvMaker {
+    fn empty() -> Env;
+    fn extend(&self) -> Env;
 }
+impl EnvMaker for Env {
+    fn empty() -> Env {
+        Rc::new(EnvData::new(None, None))
+    }
 
-pub fn extend(outer: Env) -> Env {
-    Rc::new(EnvData {
-        outer: Some(outer),
-        frame: RefCell::new(Frame::new()),
-    })
+    fn extend(&self) -> Env {
+        Rc::new(EnvData::new(Some(Rc::clone(self)), None))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
+    use super::Env;
     use crate::{
-        env::{extend, top},
+        env::EnvMaker,
         expression::{bool, int},
     };
 
     #[test]
     fn test() {
-        let env = top();
+        let env = Env::empty();
         env.set("x", int(32));
         if let Some(value) = env.get("x") {
             env.set("y", value)
@@ -62,7 +64,7 @@ mod tests {
         assert_eq!(env.get("x"), Some(int(32)));
         assert_eq!(env.get("y"), Some(int(32)));
 
-        let extended = extend(Rc::clone(&env));
+        let extended = env.extend();
         extended.set("x", bool(true));
         assert_eq!(extended.get("x"), Some(bool(true)));
         assert_eq!(extended.get("y"), Some(int(32)));

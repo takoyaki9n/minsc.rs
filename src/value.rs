@@ -35,7 +35,7 @@ impl fmt::Display for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{env, expression::nil};
+    use crate::{env::{Env, EnvMaker}, expression::nil};
 
     use super::Value;
 
@@ -58,7 +58,7 @@ mod tests {
                 Value::Closure {
                     params: vec![format!("x"), format!("y")],
                     body: vec![nil()],
-                    env: env::top(),
+                    env: Env::empty(),
                 },
                 "<Closure (x, y)>",
             ),

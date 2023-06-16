@@ -2,7 +2,7 @@ use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
     built_in_procs::numbers::define_procs,
-    env::{extend, top, Env},
+    env::{Env, EnvMaker},
     expression::{closure, undef, Expression, ExpressionData},
     value::Value,
 };
@@ -64,7 +64,7 @@ fn eval_let(exprs: Vec<Expression>, env: Env) -> Result<Expression, String> {
             Ok(inits)
         })?;
 
-    let extended = extend(Rc::clone(&env));
+    let extended = env.extend();
     for (param, arg) in inits {
         extended.set(param, eval_expression(arg, Rc::clone(&env))?);
     }
@@ -89,7 +89,7 @@ fn eval_closure(
         ));
     }
 
-    let extended = extend(closing);
+    let extended = closing.extend();
     for (param, arg) in params.into_iter().zip(args.into_iter()) {
         let value = eval_expression(arg, Rc::clone(&invocation))?;
         extended.set(param, value);
@@ -162,7 +162,7 @@ fn eval_expression(expr: Expression, env: Env) -> Result<Expression, String> {
 }
 
 pub fn eval(expr: Expression) -> Result<Expression, String> {
-    let env = top();
+    let env = Env::empty();
     define_procs(&env);
 
     eval_expression(expr, env)
