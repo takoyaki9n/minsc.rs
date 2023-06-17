@@ -1,9 +1,13 @@
-#![allow(dead_code)]
+use std::rc::Rc;
 
+use built_in_procs::numbers::define_procs;
+use env::{Env, EnvMaker};
+use eval::eval;
 use inquire::{
     ui::{RenderConfig, Styled},
     Text,
 };
+use parser::parse;
 
 mod built_in_procs;
 mod env;
@@ -12,15 +16,40 @@ mod expression;
 mod parser;
 mod value;
 
-fn main() {
-    let render_config = RenderConfig::default().with_prompt_prefix(Styled::new("minsc>"));
-    let input = Text::new("")
-        .with_initial_value("(+ 1 2)")
-        .with_render_config(render_config)
-        .prompt();
+fn render_config() -> RenderConfig {
+    let mut config = RenderConfig::empty();
+    let prefix = Styled::new("minsc>");
+    config.prompt_prefix = prefix;
+    config.answered_prompt_prefix = prefix;
 
-    match input {
-        Ok(input) => println!("-> {}", input),
-        Err(_) => println!("An error happened when asking for your name, try again later."),
+    config
+}
+
+fn main() {
+    let env = Env::empty();
+    define_procs(&env);
+    loop {
+        let result = Text::new("").with_render_config(render_config()).prompt();
+
+        match result {
+            Ok(input) => {
+                if input == "exit" {
+                    println!("Bye");
+                    break;
+                }
+
+                match parse(&input) {
+                    Ok((_, expr)) => match eval(expr, Rc::clone(&env)) {
+                        Ok(reducted) => println!("{}", reducted),
+                        Err(error) => println!("{}", error),
+                    },
+                    Err(error) => println!("{}", error),
+                }
+            }
+            Err(error) => {
+                println!("{}", error);
+                break;
+            }
+        }
     }
 }

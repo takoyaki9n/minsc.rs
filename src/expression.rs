@@ -69,6 +69,7 @@ pub fn cons(car: Expression, cdr: Expression) -> Expression {
     Rc::new(ExpressionData::Cons(car, cdr))
 }
 
+#[cfg(test)]
 pub fn list(exprs: Vec<Expression>) -> Expression {
     exprs
         .into_iter()
