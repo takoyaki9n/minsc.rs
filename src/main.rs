@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use built_in_procs::numbers::define_procs;
 use env::{Env, EnvMaker};
 use eval::eval;
@@ -39,7 +37,7 @@ fn main() {
                 }
 
                 match parse(&input) {
-                    Ok((_, expr)) => match eval(expr, Rc::clone(&env)) {
+                    Ok((_, expr)) => match eval(expr, &env) {
                         Ok(reducted) => println!("{}", reducted),
                         Err(error) => println!("{}", error),
                     },
