@@ -19,6 +19,10 @@ impl EnvData {
         }
     }
 
+    pub fn is_top(&self) -> bool {
+        self.outer.is_none()
+    }
+
     pub fn get(&self, name: impl Into<String>) -> Option<Expression> {
         let name = name.into();
         self.frame.borrow().get(&name).map_or_else(

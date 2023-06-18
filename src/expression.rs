@@ -11,7 +11,7 @@ pub enum ExpressionData {
 pub type Expression = Rc<ExpressionData>;
 
 impl ExpressionData {
-    pub fn to_vec(&self) -> Option<Vec<Expression>> {
+    pub fn as_vec(&self) -> Option<Vec<Expression>> {
         let mut exprs = vec![];
         let mut expr = self;
         while let Self::Cons(car, cdr) = expr {
