@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     env::{Env, EnvMaker},
@@ -35,31 +35,31 @@ fn expect_symbols(expr: Expression) -> Result<Vec<String>, String> {
 }
 
 fn eval_lambda(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    let mut exprs = VecDeque::from(exprs);
+    let mut exprs = exprs.into_iter();
 
-    let params = exprs.pop_front().map_or(
+    let params = exprs.next().map_or(
         Err("Syntax Error: malformed labbda".to_string()),
         expect_symbols,
     )?;
 
-    Ok(closure(params, exprs.into(), Rc::clone(env)))
+    Ok(closure(params, Vec::from_iter(exprs), Rc::clone(env)))
 }
 
 fn eval_let(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    let mut exprs = VecDeque::from(exprs);
+    let mut exprs = exprs.into_iter();
 
     let inits = exprs
-        .pop_front()
+        .next()
         .map_or(Err("Syntax Error: malformed let".to_string()), expect_list)?
         .into_iter()
         .try_fold(vec![], |mut inits, expr| {
-            let mut pair = expect_list(expr)?;
+            let mut pair = expect_list(expr)?.into_iter();
             if pair.len() != 2 {
                 return Err("Syntax Error: malformed let".to_string());
             }
 
-            let arg = pair.pop().unwrap();
-            let param = expect_symbol(pair.pop().unwrap().as_ref())?;
+            let param = expect_symbol(pair.next().unwrap().as_ref())?;
+            let arg = pair.next().unwrap();
             inits.push((param, arg));
             Ok(inits)
         })?;
@@ -69,40 +69,36 @@ fn eval_let(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
         extended.set(param, eval(arg, env)?);
     }
 
-    exprs
-        .into_iter()
-        .try_fold(undef(), |_, expr| eval(expr, &extended))
+    exprs.try_fold(undef(), |_, expr| eval(expr, &extended))
 }
 
 fn eval_let_star(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
-    let mut exprs = VecDeque::from(exprs);
+    let mut exprs = exprs.into_iter();
 
     let inits = exprs
-        .pop_front()
+        .next()
         .map_or(Err("Syntax Error: malformed let".to_string()), expect_list)?
         .into_iter()
         .try_fold(vec![], |mut inits, expr| {
-            let mut pair = expect_list(expr)?;
+            let mut pair = expect_list(expr)?.into_iter();
             if pair.len() != 2 {
                 return Err("Syntax Error: malformed let".to_string());
             }
 
-            let arg = pair.pop().unwrap();
-            let param = expect_symbol(pair.pop().unwrap().as_ref())?;
+            let param = expect_symbol(pair.next().unwrap().as_ref())?;
+            let arg = pair.next().unwrap();
             inits.push((param, arg));
             Ok(inits)
         })?;
 
     let mut extended = Rc::clone(env);
     for (param, arg) in inits {
-        let reducted = eval(arg, &extended)?;
+        let evaled = eval(arg, &extended)?;
         extended = extended.extend();
-        extended.set(param, reducted);
+        extended.set(param, evaled);
     }
 
-    exprs
-        .into_iter()
-        .try_fold(undef(), |_, expr| eval(expr, &extended))
+    exprs.try_fold(undef(), |_, expr| eval(expr, &extended))
 }
 
 fn eval_define(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
@@ -110,26 +106,29 @@ fn eval_define(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> 
         return Err("Eval Error: define is available only at top-level".to_string());
     }
 
-    let mut exprs = VecDeque::from(exprs);
-    match exprs.pop_front() {
+    let mut exprs = exprs.into_iter();
+    match exprs.next() {
         Some(expr) => match expr.as_ref() {
             ExpressionData::Atom(Value::Symbol(name)) => {
                 if exprs.len() > 2 {
                     return Err("Syntax Error: malformed define".to_string());
                 }
 
-                let reducted = exprs
-                    .pop_front()
+                let evaled = exprs
+                    .next()
                     .map(|expr| eval(expr, env))
                     .unwrap_or(Ok(undef()))?;
-                env.set(name, reducted);
+                env.set(name, evaled);
 
                 Ok(symbol(name))
             }
             ExpressionData::Cons(car, cdr) => {
                 let name = expect_symbol(car)?;
                 let params = expect_symbols(Rc::clone(cdr))?;
-                env.set(&name, closure(params, exprs.into(), Rc::clone(env)));
+                env.set(
+                    &name,
+                    closure(params, Vec::from_iter(exprs), Rc::clone(env)),
+                );
                 Ok(symbol(name))
             }
             _ => Err("Syntax Error: malformed define".to_string()),
@@ -182,13 +181,13 @@ fn eval_if(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> {
         return Err("Syntax Error: malformed if".to_string());
     }
 
-    let mut exprs = VecDeque::from(exprs);
-    let predicate = exprs.pop_front().unwrap();
-    let consequent = exprs.pop_front().unwrap();
+    let mut exprs = exprs.into_iter();
+    let predicate = exprs.next().unwrap();
+    let consequent = exprs.next().unwrap();
 
     match eval(predicate, env)?.as_ref() {
         ExpressionData::Atom(Value::Bool(false)) => exprs
-            .pop_front()
+            .next()
             .map_or(Ok(undef()), |alternative| eval(alternative, env)),
         _ => eval(consequent, env),
     }
@@ -218,8 +217,8 @@ pub fn eval(expr: Expression, env: &Env) -> Result<Expression, String> {
                 Some(symbol) if symbol == "lambda" => eval_lambda(exprs, env),
                 Some(symbol) if symbol == "let" => eval_let(exprs, env),
                 Some(symbol) if symbol == "let*" => eval_let_star(exprs, env),
-                Some(symbol) if symbol == "if" => eval_if(exprs, env),
                 Some(symbol) if symbol == "define" => eval_define(exprs, env),
+                Some(symbol) if symbol == "if" => eval_if(exprs, env),
                 _ => eval_apply(car.clone(), exprs, env),
             }
         }
@@ -232,58 +231,108 @@ mod tests {
     use crate::{
         built_in_procs::numbers::define_procs,
         env::{Env, EnvMaker},
-        expression::{int, undef},
+        expression::{bool, int, undef},
         parser::parse,
     };
 
+    macro_rules! assert_eval_ok {
+        ($code: literal, $expected: expr) => {
+            let env = Env::empty();
+            define_procs(&env);
+            let (_, expr) = parse($code).unwrap();
+            assert_eq!(eval(expr, &env), Ok($expected), "{}", $code);
+        };
+    }
+    macro_rules! assert_eval_err {
+        ($code: literal) => {
+            let env = Env::empty();
+            define_procs(&env);
+            let (_, expr) = parse($code).unwrap();
+            assert!(eval(expr, &env).is_err(), "{}", $code);
+        };
+    }
+
     #[test]
     fn eval_if_test() {
-        let env = Env::empty();
-        define_procs(&env);
-        let cases = vec![
-            ("(if #t 1 2)", int(1)),
-            ("(if #f 1 2)", int(2)),
-            ("(if 0 1 2)", int(1)),
-            ("(if (if #t #f #t) (if #f 1 2) (if #t 3 4))", int(3)),
-            ("(if #t 1)", int(1)),
-            ("(if #f 1)", undef()),
-        ];
-        for (input, expected) in cases {
-            let (_, expr) = parse(input).unwrap();
-            assert_eq!(eval(expr, &env), Ok(expected))
-        }
+        assert_eval_ok!("(if #t 1 2)", int(1));
+        assert_eval_ok!("(if #f 1 2)", int(2));
+        assert_eval_ok!("(if 0 1 2)", int(1));
+        assert_eval_ok!("(if (if #t #f #t) (if #f 1 2) (if #t 3 4))", int(3));
+        assert_eval_ok!("(if #t 1)", int(1));
+        assert_eval_ok!("(if #f 1)", undef());
 
-        let cases = vec!["(if #t)", "(if #t 1 2 3)"];
-        for input in cases {
-            let (_, expr) = parse(input).unwrap();
-            assert!(eval(expr, &env).is_err(), "eval({}) should be error", input);
-        }
+        assert_eval_err!("(if #t)");
+        assert_eval_err!("(if #t 1 2 3)");
     }
 
     #[test]
     fn eval_calc_test() {
-        let env = Env::empty();
-        define_procs(&env);
-        let (_, expr) = parse("(+ (*) (/ (- 125) (+ 6 4)) (+ 5))").unwrap();
-        let value = eval(expr, &env).unwrap();
-        assert_eq!(value, int(-6));
+        assert_eval_ok!("(+ (*) (/ (- 125) (+ 6 4)) (+ 5))", int(-6));
     }
 
     #[test]
     fn eval_lambda_test() {
-        let env = Env::empty();
-        define_procs(&env);
-        let (_, expr) = parse("((lambda (x y) (+ (* x x) (* y y))) 3 4)").unwrap();
-        let value = eval(expr, &env).unwrap();
-        assert_eq!(value, int(25));
+        assert_eval_ok!("((lambda (x y) (+ (* x x) (* y y))) 3 4)", int(25));
+        assert_eval_ok!("((lambda () #t))", bool(true));
+        assert_eval_ok!("((lambda (x)) 1)", undef());
+
+        assert_eval_err!("((lambda x (+ x 1)) 10)");
+        assert_eval_err!("((lambda (x) x) 1 2)");
+        assert_eval_err!("((lambda (x y) (- x y)) 1)");
+        assert_eval_err!("((lambda (1 x) x) 1 2)");
+        assert_eval_err!("((lambda (x . y) y) 1 2)");
     }
 
     #[test]
     fn eval_let_test() {
-        let env = Env::empty();
-        define_procs(&env);
-        let (_, expr) = parse("(let ((a 2) (b 3)) (+ a b))").unwrap();
-        let value = eval(expr, &env).unwrap();
-        assert_eq!(value, int(5));
+        assert_eval_ok!("(let ((a 2) (b (/ 10 2))) (+ a b))", int(7));
+        assert_eval_ok!("(let () 12345)", int(12345));
+        assert_eval_ok!(
+            "(let ((a 1) (b 2)) 
+                (let ((a 3)) (* a b)))",
+            int(6)
+        );
+        assert_eval_ok!(
+            "(let* ((a 1) (b 2))
+                (* 1 2 3 4 5)
+                (+ a b))",
+            int(3)
+        );
+        assert_eval_ok!(
+            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y))))))) 
+                   (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))) 
+                ((fix fact) 6))",
+            int(720)
+        );
+
+        assert_eval_err!("(let ((a 1) (b (+ a 4))) (* a b))");
+        assert_eval_err!("(let x (* x 2))");
+        assert_eval_err!("(let (x 1) (+ x 2))");
+        assert_eval_err!("(let ((a . 1)) (+ a 2))");
+        assert_eval_err!("(let ((a 1) . (b 2)) (+ a b))");
+    }
+
+    #[test]
+    fn eval_let_star_test() {
+        assert_eval_ok!("(let* ((a 2) (b (/ 10 2))) (+ a b))", int(7));
+        assert_eval_ok!("(let* () 12345)", int(12345));
+        assert_eval_ok!(
+            "(let* ((a 1) (b 2)) 
+                (let* ((a 3)) (* a b)))",
+            int(6)
+        );
+        assert_eval_ok!(
+            "(let* ((a 1) (b 2))
+                (* 1 2 3 4 5)
+                (+ a b))",
+            int(3)
+        );
+        assert_eval_ok!("(let* ((a 1) (b (+ a 4))) (* a b))", int(5));
+        assert_eval_ok!("(let* ((a 1) (b (- 5 a)) (a 3)) (* a b))", int(12));
+
+        assert_eval_err!("(let* x (* x 2))");
+        assert_eval_err!("(let* (x 1) (+ x 2))");
+        assert_eval_err!("(let* ((a . 1)) (+ a 2))");
+        assert_eval_err!("(let* ((a 1) . (b 2)) (+ a b))");
     }
 }
