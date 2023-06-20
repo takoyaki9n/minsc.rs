@@ -190,7 +190,7 @@ fn eval_letrec(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
             Ok(inits)
         })?;
 
-    let extended = Rc::clone(env);
+    let extended = env.extend();
     for (param, arg) in inits {
         let evaled = eval(arg, &extended)?;
         extended.set(param, evaled);
