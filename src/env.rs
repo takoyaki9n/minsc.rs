@@ -27,12 +27,12 @@ impl EnvData {
         let name = name.into();
         self.frame.borrow().get(&name).map_or_else(
             || self.outer.as_ref().and_then(|env| env.get(name)),
-            |value| Some(value.clone()),
+            |expr| Some(Rc::clone(expr)),
         )
     }
 
-    pub fn set(&self, name: impl Into<String>, value: Expression) {
-        self.frame.borrow_mut().insert(name.into(), value);
+    pub fn set(&self, name: impl Into<String>, expr: Expression) {
+        self.frame.borrow_mut().insert(name.into(), expr);
     }
 }
 

@@ -107,34 +107,28 @@ fn eval_define(exprs: Vec<Expression>, env: &Env) -> Result<Expression, String> 
     }
 
     let mut exprs = exprs.into_iter();
-    match exprs.next() {
-        Some(expr) => match expr.as_ref() {
-            ExpressionData::Atom(Value::Symbol(name)) => {
-                if exprs.len() > 2 {
-                    return Err("Syntax Error: malformed define".to_string());
-                }
-
-                let evaled = exprs
-                    .next()
-                    .map(|expr| eval(expr, env))
-                    .unwrap_or(Ok(undef()))?;
-                env.set(name, evaled);
-
-                Ok(symbol(name))
+    let (name, evaled) = match exprs.next().as_deref() {
+        Some(ExpressionData::Atom(Value::Symbol(name))) => {
+            if exprs.len() > 2 {
+                return Err("Syntax Error: malformed define".to_string());
             }
-            ExpressionData::Cons(car, cdr) => {
-                let name = expect_symbol(car)?;
-                let params = expect_symbols(Rc::clone(cdr))?;
-                env.set(
-                    &name,
-                    closure(params, Vec::from_iter(exprs), Rc::clone(env)),
-                );
-                Ok(symbol(name))
-            }
-            _ => Err("Syntax Error: malformed define".to_string()),
-        },
-        None => Err("Syntax Error: malformed define".to_string()),
-    }
+
+            let evaled = exprs.next().map_or(Ok(undef()), |expr| eval(expr, env))?;
+
+            Ok((name.to_string(), evaled))
+        }
+        Some(ExpressionData::Cons(car, cdr)) => {
+            let name = expect_symbol(car)?;
+            let params = expect_symbols(Rc::clone(cdr))?;
+            let body = Vec::from_iter(exprs);
+
+            Ok((name, closure(params, body, Rc::clone(env))))
+        }
+        _ => Err("Syntax Error: malformed define".to_string()),
+    }?;
+    env.set(&name, evaled);
+
+    Ok(symbol(name))
 }
 
 fn eval_closure(
@@ -362,12 +356,12 @@ mod tests {
                 vec!["(define a 10)", "(let ((a 12)) (- 100 a))", "a"],
                 int(10),
             ),
+            (vec!["(define (f x) (+ 1 2) (* x x))", "(f 10)"], int(100)),
             (
-                vec!["(define (f x) (+ 1 2) (* x x))", "(f 10)"],
-                int(100),
-            ),
-            (
-                vec!["(define (fact n) (if (< n 2) 1 (* n (fact (- n 1)))))", "(fact 5)"],
+                vec![
+                    "(define (fact n) (if (< n 2) 1 (* n (fact (- n 1)))))",
+                    "(fact 5)",
+                ],
                 int(120),
             ),
         ];
