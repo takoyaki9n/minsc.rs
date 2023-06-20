@@ -34,7 +34,6 @@ fn expect_symbols(expr: &Expression) -> Result<Vec<String>, String> {
     Ok(symbols)
 }
 
-
 fn map_eval(exprs: &[Expression], env: &Env) -> Result<Vec<Expression>, String> {
     exprs.iter().try_fold(Vec::new(), |mut values, expr| {
         values.push(eval_expression(expr, env)?);
@@ -82,7 +81,7 @@ fn eval_let(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     exprs.try_fold(undef(), |_, expr| eval_expression(expr, &extended))
 }
 
-fn eval_let_star(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+fn eval_letstar(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     let mut exprs = exprs.iter();
 
     let inits = exprs
@@ -105,6 +104,34 @@ fn eval_let_star(exprs: &[Expression], env: &Env) -> Result<Expression, String> 
     for (param, arg) in inits {
         let evaled = eval(arg, &extended)?;
         extended = extended.extend();
+        extended.set(param, evaled);
+    }
+
+    exprs.try_fold(undef(), |_, expr| eval_expression(expr, &extended))
+}
+
+fn eval_letrec(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+    let mut exprs = exprs.iter();
+
+    let inits = exprs
+        .next()
+        .map_or(Err("Syntax Error: malformed let".to_string()), expect_list)?
+        .iter()
+        .try_fold(vec![], |mut inits, expr| {
+            let mut pair = expect_list(expr)?.into_iter();
+            if pair.len() != 2 {
+                return Err("Syntax Error: malformed let".to_string());
+            }
+
+            let param = expect_symbol(pair.next().unwrap().as_ref())?;
+            let arg = pair.next().unwrap();
+            inits.push((param, arg));
+            Ok(inits)
+        })?;
+
+    let extended = Rc::clone(env);
+    for (param, arg) in inits {
+        let evaled = eval(arg, &extended)?;
         extended.set(param, evaled);
     }
 
@@ -207,7 +234,8 @@ pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, Strin
             match as_symbol(car) {
                 Some(symbol) if symbol == "lambda" => eval_lambda(&exprs, env),
                 Some(symbol) if symbol == "let" => eval_let(&exprs, env),
-                Some(symbol) if symbol == "let*" => eval_let_star(&exprs, env),
+                Some(symbol) if symbol == "let*" => eval_letstar(&exprs, env),
+                Some(symbol) if symbol == "letrec" => eval_letrec(&exprs, env),
                 Some(symbol) if symbol == "define" => eval_define(&exprs, env),
                 Some(symbol) if symbol == "if" => eval_if(&exprs, env),
                 _ => eval_apply(car, &exprs, env),
@@ -232,20 +260,20 @@ mod tests {
     };
 
     macro_rules! assert_eval_ok {
-        ($code: literal, $expected: expr) => {
+        ($code: expr, $expected: expr) => {{
             let env = Env::empty();
             define_procs(&env);
             let (_, expr) = parse($code).unwrap();
             assert_eq!(eval(expr, &env), Ok($expected), "{}", $code);
-        };
+        }};
     }
     macro_rules! assert_eval_err {
-        ($code: literal) => {
+        ($code: expr) => {{
             let env = Env::empty();
             define_procs(&env);
             let (_, expr) = parse($code).unwrap();
             assert!(eval(expr, &env).is_err(), "{}", $code);
-        };
+        }};
     }
 
     #[test]
@@ -281,77 +309,75 @@ mod tests {
 
     #[test]
     fn eval_let_test() {
-        assert_eval_ok!("(let ((a 2) (b (/ 10 2))) (+ a b))", int(7));
-        assert_eval_ok!("(let* ((a 2) (b (/ 10 2))) (+ a b))", int(7));
-
-        assert_eval_ok!("(let () 12345)", int(12345));
-        assert_eval_ok!("(let* () 12345)", int(12345));
-
-        assert_eval_ok!("(let ((a 1) (b 2)) (* 3 4) (+ a b))", int(3));
-        assert_eval_ok!("(let* ((a 1) (b 2)) (* 3 4) (+ a b))", int(3));
-
-        assert_eval_ok!("(let ((a 1) (b 2)) (let ((a 3)) (* a b)))", int(6));
-        assert_eval_ok!("(let* ((a 1) (b 2)) (let* ((a 3)) (* a b)))", int(6));
-
-        assert_eval_err!("(let ((a 2) (b (+ a 3))) (* a b))");
-        assert_eval_ok!("(let* ((a 2) (b (+ a 3))) (* a b))", int(10));
-
-        assert_eval_err!("(let ((a 1) (b (- 5 a)) (a 3)) (* a b))");
-        assert_eval_ok!("(let* ((a 1) (b (- 5 a)) (a 3)) (* a b))", int(12));
-
-        assert_eval_ok!(
-            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
-                   (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))) 
-                ((fix fact) 6))",
-            int(720)
-        );
-        assert_eval_ok!(
-            "(let* ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
-                   (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))) 
-                ((fix fact) 6))",
-            int(720)
-        );
-
-        assert_eval_err!(
-            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
-                    (fact (fix (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))))
-                (fact 6))"
-        );
-        assert_eval_ok!(
-            "(let* ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
-                    (fact (fix (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))))
-                (fact 6))",
-            int(720)
-        );
-
-        assert_eval_err!(
-            "(let ((fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1)))))))
-                (fact 5))"
-        );
-        assert_eval_err!(
-            "(let* ((fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1)))))))
-                (fact 5))"
-        );
-
-        assert_eval_err!("(let (+ 1 2))");
-        assert_eval_err!("(let* (+ 1 2))");
-
-        assert_eval_err!("(let x (* x 2))");
-        assert_eval_err!("(let* x (* x 2))");
-
-        assert_eval_err!("(let (x 1) (+ x 2))");
-        assert_eval_err!("(let* (x 1) (+ x 2))");
-
-        assert_eval_err!("(let ((a . 1)) (+ a 2))");
-        assert_eval_err!("(let* ((a . 1)) (+ a 2))");
-
-        assert_eval_err!("(let ((a 1) . (b 2)) (+ a b))");
-        assert_eval_err!("(let* ((a 1) . (b 2)) (+ a b))");
+        let names = ["let", "let*", "letrec"];
+        let cases = [
+            (
+                "(let ((a 2) (b (/ 10 2))) (+ a b))",
+                [Ok(int(7)), Ok(int(7)), Ok(int(7))],
+            ),
+            (
+                "(let () 12345)",
+                [Ok(int(12345)), Ok(int(12345)), Ok(int(12345))],
+            ),
+            (
+                "(let ((a 1) (b 2)) (* 3 4) (+ a b))",
+                [Ok(int(3)), Ok(int(3)), Ok(int(3))],
+            ),
+            (
+                "(let ((a 1) (b 2)) (let ((a 3)) (* a b)))",
+                [Ok(int(6)), Ok(int(6)), Ok(int(6))],
+            ),
+            (
+                "(let ((a 2) (b (+ a 3))) (* a b))",
+                [Err(()), Ok(int(10)), Ok(int(10))]
+            ),
+            (
+                "(let ((a 1) (b 4) (a 3)) (* a b))",
+                [Ok(int(12)), Ok(int(12)), Ok(int(12))] // Undefined behavior for `let` and `letrec`
+            ),
+            (
+                "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+                       (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1))))))))
+                    ((fix fact) 6))",
+                [Ok(int(720)), Ok(int(720)), Ok(int(720))]
+            ),
+            (
+                "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+                       (fact (fix (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))))
+                    (fact 6))",
+                [Err(()), Ok(int(720)), Ok(int(720))]
+            ),
+            (
+                "(let ((fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1)))))))
+                    (fact 5))",
+                [Err(()), Err(()), Ok(int(120))]
+            ),
+            (
+                "(let ((even? (lambda (n) (if (= n 0) #t (odd? (- n 1))))) 
+                          (odd? (lambda (n) (if (= n 0) #f (even? (- n 1))))))
+                    (even? 11))",
+                    [Err(()), Err(()), Ok(bool(false))]
+            ),
+            ("(let (+ 1 2))", [Err(()), Err(()), Err(())]),
+            ("(let x (* x 2))", [Err(()), Err(()), Err(())]),
+            ("(let (x 1) (+ x 2))", [Err(()), Err(()), Err(())]),
+            ("(let ((a . 1)) (+ a 2))", [Err(()), Err(()), Err(())]),
+            ("(let ((a 1) . (b 2)) (+ a b))", [Err(()), Err(()), Err(())]),
+        ];
+        for (code, expects) in cases {
+            for (name, expect) in names.into_iter().zip(expects.into_iter()) {
+                let code = code.replace("let", name);
+                match expect {
+                    Ok(expected) => assert_eval_ok!(code.as_str(), expected),
+                    Err(()) => assert_eval_err!(code.as_str()),
+                }
+            }
+        }
     }
 
     #[test]
     fn define_test() {
-        let cases = vec![
+        let cases = [
             (vec!["(define a 10)", "(+ a 4)"], int(14)),
             (vec!["(define a 10)", "(let ((a 12)) (- 100 a))"], int(88)),
             (

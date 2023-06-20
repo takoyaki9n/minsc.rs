@@ -35,7 +35,10 @@ impl fmt::Display for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::{env::{Env, EnvMaker}, expression::nil};
+    use crate::{
+        env::{Env, EnvMaker},
+        expression::nil,
+    };
 
     use super::Value;
 
