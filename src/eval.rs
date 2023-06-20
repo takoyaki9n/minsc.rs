@@ -104,21 +104,21 @@ fn eval_lambda(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 }
 
 fn eval_closure_like(
-    inits: &[(&String, &Expression)],
+    inits: &[(String, Expression)],
     body: &[Expression],
     closing: &Env,
     invocation: &Env,
 ) -> Result<Expression, String> {
     let extended = closing.extend();
     for (param, arg) in inits {
-        extended.set(*param, eval(Rc::clone(arg), invocation)?);
+        extended.set(param, eval(Rc::clone(arg), invocation)?);
     }
 
     body.iter()
         .try_fold(undef(), |_, expr| eval_expression(expr, &extended))
 }
 
-fn eval_let(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+fn eval_let_like(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     let mut exprs = exprs.iter();
 
     let inits = exprs
@@ -137,12 +137,9 @@ fn eval_let(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
             Ok(inits)
         })?;
 
-    let extended = env.extend();
-    for (param, arg) in inits {
-        extended.set(param, eval(arg, env)?);
-    }
+    let body = exprs.map(Rc::clone).collect::<Vec<_>>();
 
-    exprs.try_fold(undef(), |_, expr| eval_expression(expr, &extended))
+    eval_closure_like(&inits, &body, env, env)
 }
 
 fn eval_letstar(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
@@ -217,7 +214,10 @@ fn eval_closure(
         ));
     }
 
-    let inits = params.iter().zip(args.iter()).collect::<Vec<_>>();
+    let params = params.iter().map(String::to_string);
+    let args = args.iter().map(Rc::clone);
+    let inits = params.zip(args).collect::<Vec<_>>();
+
     eval_closure_like(&inits, body, closing, invocation)
 }
 
@@ -245,7 +245,7 @@ pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, Strin
                 Some(symbol) if symbol == "define" => eval_define(&exprs, env),
                 Some(symbol) if symbol == "if" => eval_if(&exprs, env),
                 Some(symbol) if symbol == "lambda" => eval_lambda(&exprs, env),
-                Some(symbol) if symbol == "let" => eval_let(&exprs, env),
+                Some(symbol) if symbol == "let" => eval_let_like(&exprs, env),
                 Some(symbol) if symbol == "let*" => eval_letstar(&exprs, env),
                 Some(symbol) if symbol == "letrec" => eval_letrec(&exprs, env),
                 _ => eval_apply(car, &exprs, env),
