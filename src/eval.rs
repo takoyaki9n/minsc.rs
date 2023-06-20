@@ -352,4 +352,33 @@ mod tests {
         assert_eval_err!("(let ((a 1) . (b 2)) (+ a b))");
         assert_eval_err!("(let* ((a 1) . (b 2)) (+ a b))");
     }
+
+    #[test]
+    fn define_test() {
+        let cases = vec![
+            (vec!["(define a 10)", "(+ a 4)"], int(14)),
+            (vec!["(define a 10)", "(let ((a 12)) (- 100 a))"], int(88)),
+            (
+                vec!["(define a 10)", "(let ((a 12)) (- 100 a))", "a"],
+                int(10),
+            ),
+            (
+                vec!["(define (f x) (+ 1 2) (* x x))", "(f 10)"],
+                int(100),
+            ),
+            (
+                vec!["(define (fact n) (if (< n 2) 1 (* n (fact (- n 1)))))", "(fact 5)"],
+                int(120),
+            ),
+        ];
+        for (codes, expected) in cases {
+            let env = Env::empty();
+            define_procs(&env);
+            let actual = codes.iter().fold(Ok(undef()), |_, code| {
+                let (_, expr) = parse(code).unwrap();
+                eval(expr, &env)
+            });
+            assert_eq!(actual, Ok(expected), "{}", codes.join("\n"));
+        }
+    }
 }
