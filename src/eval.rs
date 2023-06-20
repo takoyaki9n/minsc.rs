@@ -103,36 +103,23 @@ fn eval_lambda(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     Ok(closure(params, body, Rc::clone(env)))
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum ClosureLikeKind {
-    Closure,
-    Let,
-    LetStar,
-    LetRec,
-}
-
 fn eval_closure_like(
     inits: &[(String, Expression)],
     body: &[Expression],
     closing: &Env,
-    invocation: &Env,
-    kind: ClosureLikeKind,
+    invocation: Option<&Env>,
+    is_star: bool,
 ) -> Result<Expression, String> {
-    use ClosureLikeKind::*;
-
-    let mut first = true;
-    let mut env_arg = Rc::clone(invocation);
-    let mut env_body = Rc::clone(closing);
+    let mut env_body = if is_star {
+        Rc::clone(closing)
+    } else {
+        closing.extend()
+    };
+    let mut env_arg = Rc::clone(invocation.unwrap_or(&env_body));
     for (param, arg) in inits {
-        if kind == LetStar {
+        if is_star {
             env_arg = Rc::clone(&env_body);
-        }
-        if kind == LetStar || first {
             env_body = env_body.extend();
-            first = false;
-        }
-        if kind == LetRec {
-            env_arg = Rc::clone(&env_body);
         }
         let evaled = eval_expression(arg, &env_arg)?;
         env_body.set(param, evaled);
@@ -145,7 +132,8 @@ fn eval_closure_like(
 fn eval_let_like(
     exprs: &[Expression],
     env: &Env,
-    kind: ClosureLikeKind,
+    is_star: bool,
+    is_rec: bool,
 ) -> Result<Expression, String> {
     let mut exprs = exprs.iter();
 
@@ -166,8 +154,9 @@ fn eval_let_like(
         })?;
 
     let body = exprs.map(Rc::clone).collect::<Vec<_>>();
+    let invocation = if is_star || is_rec { None } else { Some(env) };
 
-    eval_closure_like(&inits, &body, env, env, kind)
+    eval_closure_like(&inits, &body, env, invocation, is_star)
 }
 
 fn eval_closure(
@@ -189,7 +178,7 @@ fn eval_closure(
     let args = args.iter().map(Rc::clone);
     let inits = params.zip(args).collect::<Vec<_>>();
 
-    eval_closure_like(&inits, body, closing, invocation, ClosureLikeKind::Closure)
+    eval_closure_like(&inits, body, closing, Some(invocation), false)
 }
 
 fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expression, String> {
@@ -216,13 +205,9 @@ pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, Strin
                 Some(symbol) if symbol == "define" => eval_define(&exprs, env),
                 Some(symbol) if symbol == "if" => eval_if(&exprs, env),
                 Some(symbol) if symbol == "lambda" => eval_lambda(&exprs, env),
-                Some(symbol) if symbol == "let" => eval_let_like(&exprs, env, ClosureLikeKind::Let),
-                Some(symbol) if symbol == "let*" => {
-                    eval_let_like(&exprs, env, ClosureLikeKind::LetStar)
-                }
-                Some(symbol) if symbol == "letrec" => {
-                    eval_let_like(&exprs, env, ClosureLikeKind::LetRec)
-                }
+                Some(symbol) if symbol == "let" => eval_let_like(&exprs, env, false, false),
+                Some(symbol) if symbol == "let*" => eval_let_like(&exprs, env, true, false),
+                Some(symbol) if symbol == "letrec" => eval_let_like(&exprs, env, false, true),
                 _ => eval_apply(car, &exprs, env),
             }
         }
