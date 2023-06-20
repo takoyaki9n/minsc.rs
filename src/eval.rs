@@ -103,21 +103,33 @@ fn eval_lambda(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     Ok(closure(params, body, Rc::clone(env)))
 }
 
-fn eval_closure_like(
+#[derive(Debug, PartialEq, Eq)]
+enum ClosureVariant<'a> {
+    Closure(&'a Env),
+    Let,
+    LetStar,
+    LetRec,
+}
+
+fn eval_closure_variant(
     inits: &[(String, Expression)],
     body: &[Expression],
-    closing: &Env,
-    invocation: Option<&Env>,
-    is_star: bool,
+    env: &Env,
+    variant: ClosureVariant,
 ) -> Result<Expression, String> {
-    let mut env_body = if is_star {
-        Rc::clone(closing)
-    } else {
-        closing.extend()
+    use ClosureVariant::*;
+
+    let mut env_body = match variant {
+        LetStar => Rc::clone(env),
+        _ => env.extend(),
     };
-    let mut env_arg = Rc::clone(invocation.unwrap_or(&env_body));
+    let mut env_arg = Rc::clone(match variant {
+        Closure(invocation) => invocation,
+        Let => env,
+        _ => &env_body,
+    });
     for (param, arg) in inits {
-        if is_star {
+        if variant == LetStar {
             env_arg = Rc::clone(&env_body);
             env_body = env_body.extend();
         }
@@ -129,11 +141,10 @@ fn eval_closure_like(
         .try_fold(undef(), |_, expr| eval_expression(expr, &env_body))
 }
 
-fn eval_let_like(
+fn eval_let_variant(
     exprs: &[Expression],
     env: &Env,
-    is_star: bool,
-    is_rec: bool,
+    variant: ClosureVariant,
 ) -> Result<Expression, String> {
     let mut exprs = exprs.iter();
 
@@ -154,9 +165,8 @@ fn eval_let_like(
         })?;
 
     let body = exprs.map(Rc::clone).collect::<Vec<_>>();
-    let invocation = if is_star || is_rec { None } else { Some(env) };
 
-    eval_closure_like(&inits, &body, env, invocation, is_star)
+    eval_closure_variant(&inits, &body, env, variant)
 }
 
 fn eval_closure(
@@ -178,7 +188,7 @@ fn eval_closure(
     let args = args.iter().map(Rc::clone);
     let inits = params.zip(args).collect::<Vec<_>>();
 
-    eval_closure_like(&inits, body, closing, Some(invocation), false)
+    eval_closure_variant(&inits, body, closing, ClosureVariant::Closure(invocation))
 }
 
 fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expression, String> {
@@ -201,13 +211,14 @@ pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, Strin
         ExpressionData::Cons(car, cdr) => {
             let exprs = expect_list(cdr)?;
 
+            use ClosureVariant::*;
             match as_symbol(car) {
                 Some(symbol) if symbol == "define" => eval_define(&exprs, env),
                 Some(symbol) if symbol == "if" => eval_if(&exprs, env),
                 Some(symbol) if symbol == "lambda" => eval_lambda(&exprs, env),
-                Some(symbol) if symbol == "let" => eval_let_like(&exprs, env, false, false),
-                Some(symbol) if symbol == "let*" => eval_let_like(&exprs, env, true, false),
-                Some(symbol) if symbol == "letrec" => eval_let_like(&exprs, env, false, true),
+                Some(symbol) if symbol == "let" => eval_let_variant(&exprs, env, Let),
+                Some(symbol) if symbol == "let*" => eval_let_variant(&exprs, env, LetStar),
+                Some(symbol) if symbol == "letrec" => eval_let_variant(&exprs, env, LetRec),
                 _ => eval_apply(car, &exprs, env),
             }
         }
