@@ -27,7 +27,7 @@ impl fmt::Display for Value {
             Self::Bool(_) => write!(f, "#f"),
             Self::Int(n) => write!(f, "{}", n),
             Self::Symbol(s) => write!(f, "{}", s),
-            Self::BuiltInProc { name, .. } => write!(f, "<Built-In-Proc: {}>", name),
+            Self::BuiltInProc { name, .. } => write!(f, "<Built-In-Proc: ({})>", name),
             Self::Closure { params, .. } => write!(f, "<Closure ({})>", params.join(", ")),
         }
     }
@@ -52,7 +52,7 @@ mod tests {
                     name: "foo".into(),
                     proc: |_args| Ok(nil()),
                 },
-                "<Built-In-Proc: foo>",
+                "<Built-In-Proc: (foo)>",
             ),
             (
                 Value::Closure {
