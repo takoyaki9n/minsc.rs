@@ -111,7 +111,8 @@ fn eval_closure_like(
 ) -> Result<Expression, String> {
     let extended = closing.extend();
     for (param, arg) in inits {
-        extended.set(param, eval(Rc::clone(arg), invocation)?);
+        let evaled = eval_expression(arg, invocation)?;
+        extended.set(param, evaled);
     }
 
     body.iter()
@@ -163,7 +164,7 @@ fn eval_letstar(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 
     let mut extended = Rc::clone(env);
     for (param, arg) in inits {
-        let evaled = eval(arg, &extended)?;
+        let evaled = eval_expression(&arg, &extended)?;
         extended = extended.extend();
         extended.set(param, evaled);
     }
@@ -192,7 +193,7 @@ fn eval_letrec(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 
     let extended = env.extend();
     for (param, arg) in inits {
-        let evaled = eval(arg, &extended)?;
+        let evaled = eval_expression(&arg, &extended)?;
         extended.set(param, evaled);
     }
 
