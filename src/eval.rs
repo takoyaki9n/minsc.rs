@@ -286,53 +286,70 @@ mod tests {
     #[test]
     fn eval_let_test() {
         assert_eval_ok!("(let ((a 2) (b (/ 10 2))) (+ a b))", int(7));
+        assert_eval_ok!("(let* ((a 2) (b (/ 10 2))) (+ a b))", int(7));
+
         assert_eval_ok!("(let () 12345)", int(12345));
+        assert_eval_ok!("(let* () 12345)", int(12345));
+
+        assert_eval_ok!("(let ((a 1) (b 2)) (* 3 4) (+ a b))", int(3));
+        assert_eval_ok!("(let* ((a 1) (b 2)) (* 3 4) (+ a b))", int(3));
+
+        assert_eval_ok!("(let ((a 1) (b 2)) (let ((a 3)) (* a b)))", int(6));
+        assert_eval_ok!("(let* ((a 1) (b 2)) (let* ((a 3)) (* a b)))", int(6));
+
+        assert_eval_err!("(let ((a 2) (b (+ a 3))) (* a b))");
+        assert_eval_ok!("(let* ((a 2) (b (+ a 3))) (* a b))", int(10));
+
+        assert_eval_err!("(let ((a 1) (b (- 5 a)) (a 3)) (* a b))");
+        assert_eval_ok!("(let* ((a 1) (b (- 5 a)) (a 3)) (* a b))", int(12));
+
         assert_eval_ok!(
-            "(let ((a 1) (b 2)) 
-                (let ((a 3)) (* a b)))",
-            int(6)
+            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+                   (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))) 
+                ((fix fact) 6))",
+            int(720)
         );
         assert_eval_ok!(
-            "(let* ((a 1) (b 2))
-                (* 1 2 3 4 5)
-                (+ a b))",
-            int(3)
-        );
-        assert_eval_ok!(
-            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y))))))) 
+            "(let* ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
                    (fact (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))) 
                 ((fix fact) 6))",
             int(720)
         );
 
-        assert_eval_err!("(let ((a 1) (b (+ a 4))) (* a b))");
+        assert_eval_err!(
+            "(let ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+                    (fact (fix (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))))
+                (fact 6))"
+        );
+        assert_eval_ok!(
+            "(let* ((fix (lambda (f) ((lambda (x) (f (lambda (y) ((x x) y)))) (lambda (x) (f (lambda (y) ((x x) y)))))))
+                    (fact (fix (lambda (f) (lambda (n) (if (< n 2) 1 (* n (f (- n 1)))))))))
+                (fact 6))",
+            int(720)
+        );
+
+        assert_eval_err!(
+            "(let ((fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1)))))))
+                (fact 5))"
+        );
+        assert_eval_err!(
+            "(let* ((fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1)))))))
+                (fact 5))"
+        );
+
+        assert_eval_err!("(let (+ 1 2))");
+        assert_eval_err!("(let* (+ 1 2))");
+
         assert_eval_err!("(let x (* x 2))");
-        assert_eval_err!("(let (x 1) (+ x 2))");
-        assert_eval_err!("(let ((a . 1)) (+ a 2))");
-        assert_eval_err!("(let ((a 1) . (b 2)) (+ a b))");
-    }
-
-    #[test]
-    fn eval_let_star_test() {
-        assert_eval_ok!("(let* ((a 2) (b (/ 10 2))) (+ a b))", int(7));
-        assert_eval_ok!("(let* () 12345)", int(12345));
-        assert_eval_ok!(
-            "(let* ((a 1) (b 2)) 
-                (let* ((a 3)) (* a b)))",
-            int(6)
-        );
-        assert_eval_ok!(
-            "(let* ((a 1) (b 2))
-                (* 1 2 3 4 5)
-                (+ a b))",
-            int(3)
-        );
-        assert_eval_ok!("(let* ((a 1) (b (+ a 4))) (* a b))", int(5));
-        assert_eval_ok!("(let* ((a 1) (b (- 5 a)) (a 3)) (* a b))", int(12));
-
         assert_eval_err!("(let* x (* x 2))");
+
+        assert_eval_err!("(let (x 1) (+ x 2))");
         assert_eval_err!("(let* (x 1) (+ x 2))");
+
+        assert_eval_err!("(let ((a . 1)) (+ a 2))");
         assert_eval_err!("(let* ((a . 1)) (+ a 2))");
+
+        assert_eval_err!("(let ((a 1) . (b 2)) (+ a b))");
         assert_eval_err!("(let* ((a 1) . (b 2)) (+ a b))");
     }
 }
