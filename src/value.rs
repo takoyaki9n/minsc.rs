@@ -14,7 +14,7 @@ pub enum Value {
     },
     BuiltInProc {
         name: String,
-        proc: fn(Vec<Expression>) -> Result<Expression, String>,
+        proc: fn(&[Expression]) -> Result<Expression, String>,
     },
     Closure {
         params: Vec<String>,

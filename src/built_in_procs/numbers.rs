@@ -2,16 +2,15 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    expression::{bool, built_in_proc, int, Expression, ExpressionInner},
-    value::Value,
+    expression::{bool, built_in_proc, int, Expression, ExpressionInner::Atom},
+    value::Value::Int,
 };
 
-fn expect_numbers(name: &str, values: Vec<Expression>) -> Result<Vec<i64>, String> {
-    values
-        .into_iter()
-        .try_fold(Vec::new(), |mut numbers, expr| match *expr {
-            ExpressionInner::Atom(Value::Int(number)) => {
-                numbers.push(number);
+fn expect_numbers(name: &str, args: &[Expression]) -> Result<Vec<i64>, String> {
+    args.iter()
+        .try_fold(Vec::new(), |mut numbers, expr| match expr.as_ref() {
+            Atom(Int(number)) => {
+                numbers.push(*number);
                 Ok(numbers)
             }
             _ => Err(format!("Type Error: number expected: {}", name)),
@@ -20,7 +19,7 @@ fn expect_numbers(name: &str, values: Vec<Expression>) -> Result<Vec<i64>, Strin
 
 fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     name: &str,
-    args: Vec<Expression>,
+    args: &[Expression],
     op: F,
     unit: i64,
     commutative: bool,
@@ -45,25 +44,25 @@ fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     }
 }
 
-fn proc_add(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_add(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_operation("+", args, |x, y| x + y, 0, true)
 }
 
-fn proc_sub(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_sub(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_operation("-", args, |x, y| x - y, 0, false)
 }
 
-fn proc_mul(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_mul(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_operation("*", args, |x, y| x * y, 1, true)
 }
 
-fn proc_div(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_div(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_operation("/", args, |x, y| x / y, 1, false)
 }
 
 fn calc_arithmetic_comparison(
     name: &str,
-    args: Vec<Expression>,
+    args: &[Expression],
     cmp: impl Fn(i64, i64) -> bool,
 ) -> Result<Expression, String> {
     if args.len() < 2 {
@@ -85,23 +84,23 @@ fn calc_arithmetic_comparison(
     Ok(bool(true))
 }
 
-fn proc_eq(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_eq(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_comparison("=", args, |x, y| x == y)
 }
 
-fn proc_lt(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_lt(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_comparison("<", args, |x, y| x < y)
 }
 
-fn proc_le(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_le(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_comparison("<=", args, |x, y| x <= y)
 }
 
-fn proc_gt(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_gt(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_comparison(">", args, |x, y| x > y)
 }
 
-fn proc_ge(args: Vec<Expression>) -> Result<Expression, String> {
+fn proc_ge(args: &[Expression]) -> Result<Expression, String> {
     calc_arithmetic_comparison(">=", args, |x, y| x >= y)
 }
 
@@ -129,7 +128,7 @@ mod tests {
     #[test]
     fn eval_arithmetic_operators_test() {
         type Case = (
-            fn(Vec<Expression>) -> Result<Expression, String>,
+            fn(&[Expression]) -> Result<Expression, String>,
             Vec<i64>,
             i64,
         );
@@ -150,8 +149,8 @@ mod tests {
             (proc_div, vec![1000, 5, 2, 10], 10),
         ];
         cases.into_iter().for_each(|(proc, operands, expected)| {
-            let values = operands.into_iter().map(int).collect();
-            let actual = proc(values).unwrap();
+            let args = operands.into_iter().map(int).collect::<Vec<_>>();
+            let actual = proc(&args).unwrap();
             assert_eq!(actual, int(expected));
         });
     }
@@ -159,7 +158,7 @@ mod tests {
     #[test]
     fn eval_arithmetic_operators_error_test() {
         type Case = (
-            fn(Vec<Expression>) -> Result<Expression, String>,
+            fn(&[Expression]) -> Result<Expression, String>,
             Vec<Expression>,
         );
         let cases: Vec<Case> = vec![
@@ -168,14 +167,14 @@ mod tests {
             (proc_div, vec![]),
         ];
         cases.into_iter().for_each(|(proc, args)| {
-            assert!(proc(args).is_err());
+            assert!(proc(&args).is_err());
         });
     }
 
     #[test]
     fn eval_arithmetic_comparison_test() {
         type Case = (
-            fn(Vec<Expression>) -> Result<Expression, String>,
+            fn(&[Expression]) -> Result<Expression, String>,
             Vec<i64>,
             bool,
         );
@@ -198,8 +197,8 @@ mod tests {
             (proc_ge, vec![2, 1, 2], false),
         ];
         cases.into_iter().for_each(|(proc, operands, expected)| {
-            let values = operands.into_iter().map(int).collect();
-            let actual = proc(values).unwrap();
+            let args = operands.into_iter().map(int).collect::<Vec<_>>();
+            let actual = proc(&args).unwrap();
             assert_eq!(actual, bool(expected));
         });
     }
@@ -207,7 +206,7 @@ mod tests {
     #[test]
     fn eval_arithmetic_comparison_error_test() {
         type Case = (
-            fn(Vec<Expression>) -> Result<Expression, String>,
+            fn(&[Expression]) -> Result<Expression, String>,
             Vec<Expression>,
         );
         let cases: Vec<Case> = vec![
@@ -216,7 +215,7 @@ mod tests {
             (proc_gt, vec![int(1)]),
         ];
         cases.into_iter().for_each(|(proc, args)| {
-            assert!(proc(args).is_err());
+            assert!(proc(&args).is_err());
         });
     }
 }

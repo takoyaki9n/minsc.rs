@@ -210,7 +210,10 @@ fn eval_closure(
 fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     match eval_expression(proc, env)?.as_ref() {
         Atom(SpecialForm { eval, .. }) => eval(exprs, env),
-        Atom(BuiltInProc { proc, .. }) => proc(map_eval(exprs, env)?),
+        Atom(BuiltInProc { proc, .. }) => {
+            let args= map_eval(exprs, env)?;
+            proc(&args)
+        },
         Atom(Closure {
             params,
             body,

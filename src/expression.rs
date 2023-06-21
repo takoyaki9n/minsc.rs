@@ -63,7 +63,7 @@ pub fn special_form(
 
 pub fn built_in_proc(
     name: impl Into<String>,
-    proc: fn(Vec<Expression>) -> Result<Expression, String>,
+    proc: fn(&[Expression]) -> Result<Expression, String>,
 ) -> Expression {
     atom(Value::BuiltInProc {
         name: name.into(),
