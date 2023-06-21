@@ -7,7 +7,7 @@ use crate::{
         closure, special_form, symbol, undef, Expression, ExpressionConverter,
         ExpressionInner::{Atom, Cons},
     },
-    value::Value::*,
+    value::Value::{Bool, BuiltInProc, Closure, SpecialForm, Symbol},
 };
 
 fn expect_symbol(expr: &Expression) -> Result<String, String> {
