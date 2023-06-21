@@ -31,7 +31,7 @@ impl fmt::Display for Value {
             Self::Bool(_) => write!(f, "#f"),
             Self::Int(n) => write!(f, "{}", n),
             Self::Symbol(s) => write!(f, "{}", s),
-            Self::SpecialForm { name, .. } => write!(f, "<Spefial-Form: ({})>", name),
+            Self::SpecialForm { name, .. } => write!(f, "<Special-Form: ({})>", name),
             Self::BuiltInProc { name, .. } => write!(f, "<Built-In-Proc: ({})>", name),
             Self::Closure { params, .. } => write!(f, "<Closure ({})>", params.join(", ")),
         }

@@ -211,9 +211,9 @@ fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expr
     match eval_expression(proc, env)?.as_ref() {
         Atom(SpecialForm { eval, .. }) => eval(exprs, env),
         Atom(BuiltInProc { proc, .. }) => {
-            let args= map_eval(exprs, env)?;
+            let args = map_eval(exprs, env)?;
             proc(&args)
-        },
+        }
         Atom(Closure {
             params,
             body,
@@ -223,24 +223,11 @@ fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expr
     }
 }
 
-fn eval_symbol(name: impl Into<String>, env: &Env) -> Result<Expression, String> {
-    let name: String = name.into();
-    match name.as_str() {
-        "define" => Ok(special_form(name, eval_define)),
-        "if" => Ok(special_form(name, eval_if)),
-        "lambda" => Ok(special_form(name, eval_lambda)),
-        "let" => Ok(special_form(name, eval_let)),
-        "let*" => Ok(special_form(name, eval_let_star)),
-        "letrec" => Ok(special_form(name, eval_letrec)),
-        _ => env
-            .get(&name)
-            .ok_or(format!("Eval Error: undefined variable: {}", &name)),
-    }
-}
-
 pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, String> {
     match expr.as_ref() {
-        Atom(Symbol(name)) => eval_symbol(name, env),
+        Atom(Symbol(name)) => env
+            .get(name)
+            .ok_or(format!("Eval Error: undefined variable: {}", &name)),
         Cons(car, cdr) => {
             let args = expect_list(cdr)?;
             eval_apply(car, &args, env)
