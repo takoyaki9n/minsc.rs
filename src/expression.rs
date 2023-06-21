@@ -1,6 +1,9 @@
 use std::{fmt, rc::Rc};
 
-use crate::{env::Env, value::Value};
+use crate::{
+    env::Env,
+    value::Value::{self, Bool, BuiltInProc, Closure, Int, SpecialForm, Symbol, Undef},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionInner {
@@ -8,54 +11,74 @@ pub enum ExpressionInner {
     Atom(Value),
     Cons(Expression, Expression),
 }
+use ExpressionInner::{Atom, Cons, Nil};
 pub type Expression = Rc<ExpressionInner>;
 
-impl ExpressionInner {
-    pub fn as_vec(&self) -> Option<Vec<Expression>> {
+pub trait ExpressionConverter {
+    fn as_number(&self) -> Result<i64, Expression>;
+    fn as_symbol(&self) -> Result<String, Expression>;
+    fn as_vec(&self) -> Result<Vec<Expression>, Expression>;
+}
+
+impl ExpressionConverter for Expression {
+    fn as_number(&self) -> Result<i64, Expression> {
+        match self.as_ref() {
+            Atom(Int(n)) => Ok(*n),
+            _ => Err(Rc::clone(self)),
+        }
+    }
+
+    fn as_symbol(&self) -> Result<String, Expression> {
+        match self.as_ref() {
+            Atom(Symbol(name)) => Ok(name.to_string()),
+            _ => Err(Rc::clone(self)),
+        }
+    }
+
+    fn as_vec(&self) -> Result<Vec<Expression>, Expression> {
         let mut exprs = vec![];
         let mut expr = self;
-        while let Self::Cons(car, cdr) = expr {
+        while let Cons(car, cdr) = expr.as_ref() {
             exprs.push(Rc::clone(car));
-
-            expr = cdr.as_ref();
+            expr = cdr;
         }
 
-        match expr {
-            Self::Nil => Some(exprs),
-            _ => None,
+        match expr.as_ref() {
+            Nil => Ok(exprs),
+            _ => Err(Rc::clone(expr)),
         }
     }
 }
 
 pub fn nil() -> Expression {
-    Rc::new(ExpressionInner::Nil)
+    Rc::new(Nil)
 }
 
 pub fn atom(v: Value) -> Expression {
-    Rc::new(ExpressionInner::Atom(v))
+    Rc::new(Atom(v))
 }
 
 pub fn undef() -> Expression {
-    atom(Value::Undef)
+    atom(Undef)
 }
 
 pub fn bool(b: bool) -> Expression {
-    atom(Value::Bool(b))
+    atom(Bool(b))
 }
 
 pub fn int(n: i64) -> Expression {
-    atom(Value::Int(n))
+    atom(Int(n))
 }
 
 pub fn symbol(s: impl Into<String>) -> Expression {
-    atom(Value::Symbol(s.into()))
+    atom(Symbol(s.into()))
 }
 
 pub fn special_form(
     name: impl Into<String>,
     eval: fn(&[Expression], &Env) -> Result<Expression, String>,
 ) -> Expression {
-    atom(Value::SpecialForm {
+    atom(SpecialForm {
         name: name.into(),
         eval,
     })
@@ -65,18 +88,18 @@ pub fn built_in_proc(
     name: impl Into<String>,
     proc: fn(&[Expression]) -> Result<Expression, String>,
 ) -> Expression {
-    atom(Value::BuiltInProc {
+    atom(BuiltInProc {
         name: name.into(),
         proc,
     })
 }
 
 pub fn closure(params: Vec<String>, body: Vec<Expression>, env: Env) -> Expression {
-    atom(Value::Closure { params, body, env })
+    atom(Closure { params, body, env })
 }
 
 pub fn cons(car: Expression, cdr: Expression) -> Expression {
-    Rc::new(ExpressionInner::Cons(car, cdr))
+    Rc::new(Cons(car, cdr))
 }
 
 #[cfg(test)]
@@ -88,16 +111,16 @@ pub fn list(exprs: Vec<Expression>) -> Expression {
 
 fn fmt_expression(expr: &ExpressionInner, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
     match expr {
-        ExpressionInner::Nil if is_cdr => write!(f, ")"),
-        ExpressionInner::Nil => write!(f, "()"),
-        ExpressionInner::Atom(s) if is_cdr => write!(f, ". {})", s),
-        ExpressionInner::Atom(s) => write!(f, "{}", s),
-        ExpressionInner::Cons(car, cdr) => {
+        Nil if is_cdr => write!(f, ")"),
+        Nil => write!(f, "()"),
+        Atom(s) if is_cdr => write!(f, ". {})", s),
+        Atom(s) => write!(f, "{}", s),
+        Cons(car, cdr) => {
             if !is_cdr {
                 write!(f, "(")?;
             }
             fmt_expression(car.as_ref(), f, false)?;
-            if *cdr.as_ref() != ExpressionInner::Nil {
+            if *cdr.as_ref() != Nil {
                 write!(f, " ")?;
             }
             fmt_expression(cdr.as_ref(), f, true)

@@ -4,27 +4,20 @@ use crate::{
     built_in_procs::define_procs,
     env::{Env, EnvMaker},
     expression::{
-        closure, special_form, symbol, undef, Expression,
-        ExpressionInner::{self, Atom, Cons},
+        closure, special_form, symbol, undef, Expression, ExpressionConverter,
+        ExpressionInner::{Atom, Cons},
     },
     value::Value::*,
 };
 
-fn as_symbol(expr: &ExpressionInner) -> Option<String> {
-    if let Atom(Symbol(symbol)) = expr {
-        Some(symbol.to_string())
-    } else {
-        None
-    }
-}
-
-fn expect_symbol(expr: &ExpressionInner) -> Result<String, String> {
-    as_symbol(expr).ok_or("Syntax Error: symbol is expected.".to_string())
+fn expect_symbol(expr: &Expression) -> Result<String, String> {
+    expr.as_symbol()
+        .map_err(|_| format!("Syntax Error: symbol is expected: {}", expr))
 }
 
 fn expect_list(expr: &Expression) -> Result<Vec<Expression>, String> {
     expr.as_vec()
-        .ok_or("Syntax Error: proper list is expected.".to_string())
+        .map_err(|_| format!("Syntax Error: proper list is expected: {}", expr))
 }
 
 fn expect_symbols(expr: &Expression) -> Result<Vec<String>, String> {
@@ -32,7 +25,7 @@ fn expect_symbols(expr: &Expression) -> Result<Vec<String>, String> {
 
     let mut symbols = vec![];
     for expr in exprs {
-        symbols.push(expect_symbol(expr.as_ref())?);
+        symbols.push(expect_symbol(&expr)?);
     }
 
     Ok(symbols)
@@ -162,7 +155,7 @@ fn eval_let_variant(
                 return Err("Syntax Error: malformed let".to_string());
             }
 
-            let param = expect_symbol(pair.next().unwrap().as_ref())?;
+            let param = expect_symbol(&pair.next().unwrap())?;
             let arg = pair.next().unwrap();
             inits.push((param, arg));
             Ok(inits)
