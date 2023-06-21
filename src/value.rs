@@ -45,32 +45,32 @@ mod tests {
         expression::nil,
     };
 
-    use super::Value;
+    use super::Value::{Bool, BuiltInProc, Closure, Int, SpecialForm, Symbol, Undef};
 
     #[test]
     fn display_test() {
         let cases = vec![
-            (Value::Undef, "<Undef>"),
-            (Value::Bool(true), "#t"),
-            (Value::Bool(false), "#f"),
-            (Value::Int(-1234), "-1234"),
-            (Value::Symbol("x".into()), "x"),
+            (Undef, "<Undef>"),
+            (Bool(true), "#t"),
+            (Bool(false), "#f"),
+            (Int(-1234), "-1234"),
+            (Symbol("x".into()), "x"),
             (
-                Value::SpecialForm { 
-                    name: "foo".to_string(), 
-                    eval: |_,_| Ok(nil())
+                SpecialForm {
+                    name: "foo".to_string(),
+                    eval: |_, _| Ok(nil()),
                 },
-                "<Special-Form: (foo)>"
+                "<Special-Form: (foo)>",
             ),
             (
-                Value::BuiltInProc {
+                BuiltInProc {
                     name: "bar".to_string(),
                     proc: |_args| Ok(nil()),
                 },
                 "<Built-In-Proc: (bar)>",
             ),
             (
-                Value::Closure {
+                Closure {
                     params: vec![format!("x"), format!("y")],
                     body: vec![nil()],
                     env: Env::empty(),
