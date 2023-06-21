@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    built_in_procs::define_procs,
     env::{Env, EnvMaker},
     expression::{
         closure, special_form, symbol, undef, Expression,
@@ -245,34 +246,62 @@ pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, Strin
     }
 }
 
-pub fn eval(expr: Expression, env: &Env) -> Result<Expression, String> {
-    eval_expression(&expr, env)
+pub(crate) struct Interpreter {
+    env: Env,
+}
+
+impl Interpreter {
+    pub fn new() -> Self {
+        Interpreter { env: Env::empty() }
+    }
+
+    fn define_special_forms(&self) {
+        type EvalFn = fn(&[Expression], &Env) -> Result<Expression, String>;
+        let forms: [(&str, EvalFn); 6] = [
+            ("define", eval_define),
+            ("if", eval_if),
+            ("lambda", eval_lambda),
+            ("let", eval_let),
+            ("let*", eval_let_star),
+            ("letrec", eval_letrec),
+        ];
+        for (name, eval) in forms {
+            self.env.set(name, special_form(name, eval));
+        }
+    }
+
+    pub fn init(&self) {
+        self.define_special_forms();
+        define_procs(&self.env)
+    }
+
+    pub fn eval(&self, expr: Expression) -> Result<Expression, String> {
+        eval_expression(&expr, &self.env)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::eval;
+    use super::Interpreter;
     use crate::{
-        built_in_procs::numbers::define_procs,
-        env::{Env, EnvMaker},
         expression::{bool, int, undef},
         parser::parse,
     };
 
     macro_rules! assert_eval_ok {
         ($code: expr, $expected: expr) => {{
-            let env = Env::empty();
-            define_procs(&env);
+            let interpreter = Interpreter::new();
+            interpreter.init();
             let (_, expr) = parse($code).unwrap();
-            assert_eq!(eval(expr, &env), Ok($expected), "{}", $code);
+            assert_eq!(interpreter.eval(expr), Ok($expected), "{}", $code);
         }};
     }
     macro_rules! assert_eval_err {
         ($code: expr) => {{
-            let env = Env::empty();
-            define_procs(&env);
+            let interpreter = Interpreter::new();
+            interpreter.init();
             let (_, expr) = parse($code).unwrap();
-            assert!(eval(expr, &env).is_err(), "{}", $code);
+            assert!(interpreter.eval(expr).is_err(), "{}", $code);
         }};
     }
 
@@ -394,11 +423,11 @@ mod tests {
             ),
         ];
         for (codes, expected) in cases {
-            let env = Env::empty();
-            define_procs(&env);
+            let interpreter = Interpreter::new();
+            interpreter.init();
             let actual = codes.iter().fold(Ok(undef()), |_, code| {
                 let (_, expr) = parse(code).unwrap();
-                eval(expr, &env)
+                interpreter.eval(expr)
             });
             assert_eq!(actual, Ok(expected), "{}", codes.join("\n"));
         }

@@ -105,7 +105,7 @@ fn proc_ge(args: Vec<Expression>) -> Result<Expression, String> {
     calc_arithmetic_comparison(">=", args, |x, y| x >= y)
 }
 
-pub fn define_procs(env: &Env) {
+pub(super) fn define_procs(env: &Env) {
     env.set("+", built_in_proc("+", proc_add));
     env.set("-", built_in_proc("-", proc_sub));
     env.set("*", built_in_proc("*", proc_mul));

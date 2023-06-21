@@ -1,6 +1,4 @@
-use built_in_procs::numbers::define_procs;
-use env::{Env, EnvMaker};
-use eval::eval;
+use eval::Interpreter;
 use inquire::{
     ui::{RenderConfig, Styled},
     Text,
@@ -24,8 +22,9 @@ fn render_config() -> RenderConfig {
 }
 
 fn main() {
-    let env = Env::empty();
-    define_procs(&env);
+    let interpreter = Interpreter::new();
+    interpreter.init();
+
     loop {
         let result = Text::new("").with_render_config(render_config()).prompt();
 
@@ -37,7 +36,7 @@ fn main() {
                 }
 
                 match parse(&input) {
-                    Ok((_, expr)) => match eval(expr, &env) {
+                    Ok((_, expr)) => match interpreter.eval(expr) {
                         Ok(reducted) => println!("{}", reducted),
                         Err(error) => println!("{}", error),
                     },
