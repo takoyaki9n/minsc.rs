@@ -47,12 +47,22 @@ pub fn int(n: i64) -> Expression {
     atom(Value::Int(n))
 }
 
-pub fn symbol<S: Into<String>>(s: S) -> Expression {
+pub fn symbol(s: impl Into<String>) -> Expression {
     atom(Value::Symbol(s.into()))
 }
 
-pub fn built_in_proc<S: Into<String>>(
-    name: S,
+pub fn special_form(
+    name: impl Into<String>,
+    eval: fn(&[Expression], &Env) -> Result<Expression, String>,
+) -> Expression {
+    atom(Value::SpecialForm {
+        name: name.into(),
+        eval,
+    })
+}
+
+pub fn built_in_proc(
+    name: impl Into<String>,
     proc: fn(Vec<Expression>) -> Result<Expression, String>,
 ) -> Expression {
     atom(Value::BuiltInProc {

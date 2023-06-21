@@ -8,6 +8,10 @@ pub enum Value {
     Bool(bool),
     Int(i64),
     Symbol(String),
+    SpecialForm {
+        name: String,
+        eval: fn(&[Expression], &Env) -> Result<Expression, String>,
+    },
     BuiltInProc {
         name: String,
         proc: fn(Vec<Expression>) -> Result<Expression, String>,
@@ -27,6 +31,7 @@ impl fmt::Display for Value {
             Self::Bool(_) => write!(f, "#f"),
             Self::Int(n) => write!(f, "{}", n),
             Self::Symbol(s) => write!(f, "{}", s),
+            Self::SpecialForm { name, .. } => write!(f, "<Spefial-Form: ({})>", name),
             Self::BuiltInProc { name, .. } => write!(f, "<Built-In-Proc: ({})>", name),
             Self::Closure { params, .. } => write!(f, "<Closure ({})>", params.join(", ")),
         }
@@ -51,11 +56,18 @@ mod tests {
             (Value::Int(-1234), "-1234"),
             (Value::Symbol("x".into()), "x"),
             (
+                Value::SpecialForm { 
+                    name: "foo".to_string(), 
+                    eval: |_,_| Ok(nil())
+                },
+                "<Special-Form: (foo)>"
+            ),
+            (
                 Value::BuiltInProc {
-                    name: "foo".into(),
+                    name: "bar".to_string(),
                     proc: |_args| Ok(nil()),
                 },
-                "<Built-In-Proc: (foo)>",
+                "<Built-In-Proc: (bar)>",
             ),
             (
                 Value::Closure {

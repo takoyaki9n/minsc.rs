@@ -2,12 +2,15 @@ use std::rc::Rc;
 
 use crate::{
     env::{Env, EnvMaker},
-    expression::{closure, symbol, undef, Expression, ExpressionData},
-    value::Value,
+    expression::{
+        closure, special_form, symbol, undef, Expression,
+        ExpressionData::{self, Atom, Cons},
+    },
+    value::Value::*,
 };
 
 fn as_symbol(expr: &ExpressionData) -> Option<String> {
-    if let ExpressionData::Atom(Value::Symbol(symbol)) = expr {
+    if let Atom(Symbol(symbol)) = expr {
         Some(symbol.to_string())
     } else {
         None
@@ -48,7 +51,7 @@ fn eval_define(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 
     let mut exprs = exprs.iter();
     let (name, evaled) = match exprs.next().map(Rc::as_ref) {
-        Some(ExpressionData::Atom(Value::Symbol(name))) => {
+        Some(Atom(Symbol(name))) => {
             if exprs.len() > 2 {
                 return Err("Syntax Error: malformed define".to_string());
             }
@@ -59,7 +62,7 @@ fn eval_define(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 
             Ok((name.to_string(), evaled))
         }
-        Some(ExpressionData::Cons(car, cdr)) => {
+        Some(Cons(car, cdr)) => {
             let name = expect_symbol(car)?;
             let params = expect_symbols(cdr)?;
             let body = exprs.map(Rc::clone).collect();
@@ -83,7 +86,7 @@ fn eval_if(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     let consequent = exprs.next().unwrap();
 
     match eval_expression(predicate, env)?.as_ref() {
-        ExpressionData::Atom(Value::Bool(false)) => exprs
+        Atom(Bool(false)) => exprs
             .next()
             .map_or(Ok(undef()), |alternative| eval_expression(alternative, env)),
         _ => eval_expression(consequent, env),
@@ -169,6 +172,18 @@ fn eval_let_variant(
     eval_closure_variant(&inits, &body, env, variant)
 }
 
+fn eval_let(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+    eval_let_variant(exprs, env, ClosureVariant::Let)
+}
+
+fn eval_let_star(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+    eval_let_variant(exprs, env, ClosureVariant::LetStar)
+}
+
+fn eval_letrec(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
+    eval_let_variant(exprs, env, ClosureVariant::LetRec)
+}
+
 fn eval_closure(
     params: &[String],
     body: &[Expression],
@@ -193,8 +208,9 @@ fn eval_closure(
 
 fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     match eval_expression(proc, env)?.as_ref() {
-        ExpressionData::Atom(Value::BuiltInProc { proc, .. }) => proc(map_eval(exprs, env)?),
-        ExpressionData::Atom(Value::Closure {
+        Atom(SpecialForm { eval, .. }) => eval(exprs, env),
+        Atom(BuiltInProc { proc, .. }) => proc(map_eval(exprs, env)?),
+        Atom(Closure {
             params,
             body,
             env: closing,
@@ -203,24 +219,27 @@ fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expr
     }
 }
 
+fn eval_symbol(name: impl Into<String>, env: &Env) -> Result<Expression, String> {
+    let name: String = name.into();
+    match name.as_str() {
+        "define" => Ok(special_form(name, eval_define)),
+        "if" => Ok(special_form(name, eval_if)),
+        "lambda" => Ok(special_form(name, eval_lambda)),
+        "let" => Ok(special_form(name, eval_let)),
+        "let*" => Ok(special_form(name, eval_let_star)),
+        "letrec" => Ok(special_form(name, eval_letrec)),
+        _ => env
+            .get(&name)
+            .ok_or(format!("Eval Error: undefined variable: {}", &name)),
+    }
+}
+
 pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, String> {
     match expr.as_ref() {
-        ExpressionData::Atom(Value::Symbol(symbol)) => env
-            .get(symbol)
-            .ok_or(format!("Eval Error: undefined variable: {}", symbol)),
-        ExpressionData::Cons(car, cdr) => {
-            let exprs = expect_list(cdr)?;
-
-            use ClosureVariant::*;
-            match as_symbol(car) {
-                Some(symbol) if symbol == "define" => eval_define(&exprs, env),
-                Some(symbol) if symbol == "if" => eval_if(&exprs, env),
-                Some(symbol) if symbol == "lambda" => eval_lambda(&exprs, env),
-                Some(symbol) if symbol == "let" => eval_let_variant(&exprs, env, Let),
-                Some(symbol) if symbol == "let*" => eval_let_variant(&exprs, env, LetStar),
-                Some(symbol) if symbol == "letrec" => eval_let_variant(&exprs, env, LetRec),
-                _ => eval_apply(car, &exprs, env),
-            }
+        Atom(Symbol(name)) => eval_symbol(name, env),
+        Cons(car, cdr) => {
+            let args = expect_list(cdr)?;
+            eval_apply(car, &args, env)
         }
         _ => Ok(Rc::clone(expr)),
     }
