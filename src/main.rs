@@ -5,7 +5,6 @@ use inquire::{
 };
 use parser::parse;
 
-mod built_in_procs;
 mod env;
 mod eval;
 mod expression;

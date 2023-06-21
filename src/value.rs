@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{env::Env, expression::Expression};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Value {
+pub(crate) enum Value {
     Undef,
     Bool(bool),
     Int(i64),

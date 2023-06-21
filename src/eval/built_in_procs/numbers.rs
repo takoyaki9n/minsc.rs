@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    eval::expect_numbers,
+    eval::utils::expect_numbers,
     expression::{bool, built_in_proc, int, Expression},
 };
 

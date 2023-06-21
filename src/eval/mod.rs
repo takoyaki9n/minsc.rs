@@ -1,47 +1,21 @@
+mod built_in_procs;
+mod utils;
+
 use std::rc::Rc;
 
 use crate::{
-    built_in_procs::define_procs,
     env::{Env, EnvMaker},
     expression::{
-        closure, special_form, symbol, undef, Expression, ExpressionConverter,
+        closure, special_form, symbol, undef, Expression,
         ExpressionInner::{Atom, Cons},
     },
     value::Value::{Bool, BuiltInProc, Closure, SpecialForm, Symbol},
 };
 
-pub(crate) fn expect_number(expr: &Expression) -> Result<i64, String> {
-    expr.as_number()
-        .map_err(|_| format!("Type Error: number is expected: {}", expr))
-}
-
-pub(crate) fn expect_symbol(expr: &Expression) -> Result<String, String> {
-    expr.as_symbol()
-        .map_err(|_| format!("Type Error: symbol is expected: {}", expr))
-}
-
-pub(crate) fn expect_list(expr: &Expression) -> Result<Vec<Expression>, String> {
-    expr.as_vec()
-        .map_err(|_| format!("Syntax Error: proper list is expected: {}", expr))
-}
-
-fn try_map_expressions<T, E, F>(exprs: &[Expression], f: F) -> Result<Vec<T>, E>
-where
-    F: Fn(&Expression) -> Result<T, E>,
-{
-    exprs.iter().try_fold(vec![], |mut acc, expr| {
-        acc.push(f(expr)?);
-        Ok(acc)
-    })
-}
-
-pub(crate) fn expect_numbers(exprs: &[Expression]) -> Result<Vec<i64>, String> {
-    try_map_expressions(exprs, expect_number)
-}
-
-pub(crate) fn expect_symbols(exprs: &[Expression]) -> Result<Vec<String>, String> {
-    try_map_expressions(exprs, expect_symbol)
-}
+use self::{
+    built_in_procs::define_procs,
+    utils::{expect_list, expect_symbol, expect_symbols, try_map_expressions},
+};
 
 fn eval_expressions(exprs: &[Expression], env: &Env) -> Result<Vec<Expression>, String> {
     try_map_expressions(exprs, |expr| eval_expression(expr, env))
@@ -225,7 +199,7 @@ fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expr
     }
 }
 
-pub fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, String> {
+fn eval_expression(expr: &Expression, env: &Env) -> Result<Expression, String> {
     match expr.as_ref() {
         Atom(Symbol(name)) => env
             .get(name)

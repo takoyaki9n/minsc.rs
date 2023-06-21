@@ -6,15 +6,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExpressionInner {
+pub(crate) enum ExpressionInner {
     Nil,
     Atom(Value),
     Cons(Expression, Expression),
 }
 use ExpressionInner::{Atom, Cons, Nil};
-pub type Expression = Rc<ExpressionInner>;
+pub(crate) type Expression = Rc<ExpressionInner>;
 
-pub trait ExpressionConverter {
+pub(crate) trait ExpressionConverter {
     fn as_number(&self) -> Result<i64, Expression>;
     fn as_symbol(&self) -> Result<String, Expression>;
     fn as_vec(&self) -> Result<Vec<Expression>, Expression>;
@@ -50,31 +50,31 @@ impl ExpressionConverter for Expression {
     }
 }
 
-pub fn nil() -> Expression {
+pub(crate) fn nil() -> Expression {
     Rc::new(Nil)
 }
 
-pub fn atom(v: Value) -> Expression {
+pub(crate) fn atom(v: Value) -> Expression {
     Rc::new(Atom(v))
 }
 
-pub fn undef() -> Expression {
+pub(crate) fn undef() -> Expression {
     atom(Undef)
 }
 
-pub fn bool(b: bool) -> Expression {
+pub(crate) fn bool(b: bool) -> Expression {
     atom(Bool(b))
 }
 
-pub fn int(n: i64) -> Expression {
+pub(crate) fn int(n: i64) -> Expression {
     atom(Int(n))
 }
 
-pub fn symbol(s: impl Into<String>) -> Expression {
+pub(crate) fn symbol(s: impl Into<String>) -> Expression {
     atom(Symbol(s.into()))
 }
 
-pub fn special_form(
+pub(crate) fn special_form(
     name: impl Into<String>,
     eval: fn(&[Expression], &Env) -> Result<Expression, String>,
 ) -> Expression {
@@ -84,7 +84,7 @@ pub fn special_form(
     })
 }
 
-pub fn built_in_proc(
+pub(crate) fn built_in_proc(
     name: impl Into<String>,
     proc: fn(&[Expression]) -> Result<Expression, String>,
 ) -> Expression {
@@ -94,16 +94,16 @@ pub fn built_in_proc(
     })
 }
 
-pub fn closure(params: Vec<String>, body: Vec<Expression>, env: Env) -> Expression {
+pub(crate) fn closure(params: Vec<String>, body: Vec<Expression>, env: Env) -> Expression {
     atom(Closure { params, body, env })
 }
 
-pub fn cons(car: Expression, cdr: Expression) -> Expression {
+pub(crate) fn cons(car: Expression, cdr: Expression) -> Expression {
     Rc::new(Cons(car, cdr))
 }
 
 #[cfg(test)]
-pub fn list(exprs: Vec<Expression>) -> Expression {
+pub(crate) fn list(exprs: Vec<Expression>) -> Expression {
     exprs
         .into_iter()
         .rfold(nil(), |list, expr| cons(expr, list))

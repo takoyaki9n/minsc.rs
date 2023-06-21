@@ -1,7 +1,7 @@
 use crate::env::Env;
 
-pub(crate) mod numbers;
+mod numbers;
 
-pub fn define_procs(env: &Env) {
+pub(super) fn define_procs(env: &Env) {
     numbers::define_procs(env);
 }

@@ -5,11 +5,11 @@ use crate::expression::Expression;
 type Frame = HashMap<String, Expression>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnvInner {
+pub(crate) struct EnvInner {
     outer: Option<Env>,
     frame: RefCell<Frame>,
 }
-pub type Env = Rc<EnvInner>;
+pub(crate) type Env = Rc<EnvInner>;
 
 impl EnvInner {
     pub fn new(outer: Option<Env>, frame: Option<Frame>) -> Self {
@@ -36,7 +36,7 @@ impl EnvInner {
     }
 }
 
-pub trait EnvMaker {
+pub(crate) trait EnvMaker {
     fn empty() -> Env;
     fn extend(&self) -> Env;
 }
