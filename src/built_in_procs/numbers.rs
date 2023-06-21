@@ -2,20 +2,9 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    expression::{bool, built_in_proc, int, Expression, ExpressionInner::Atom},
-    value::Value::Int,
+    eval::expect_numbers,
+    expression::{bool, built_in_proc, int, Expression},
 };
-
-fn expect_numbers(name: &str, args: &[Expression]) -> Result<Vec<i64>, String> {
-    args.iter()
-        .try_fold(Vec::new(), |mut numbers, expr| match expr.as_ref() {
-            Atom(Int(number)) => {
-                numbers.push(*number);
-                Ok(numbers)
-            }
-            _ => Err(format!("Type Error: number expected: {}", name)),
-        })
-}
 
 fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     name: &str,
@@ -24,7 +13,7 @@ fn calc_arithmetic_operation<F: Fn(i64, i64) -> i64>(
     unit: i64,
     commutative: bool,
 ) -> Result<Expression, String> {
-    let numbers = expect_numbers(name, args)?;
+    let numbers = expect_numbers(args)?;
     if commutative {
         Ok(int(numbers.into_iter().fold(unit, op)))
     } else {
@@ -73,7 +62,7 @@ fn calc_arithmetic_comparison(
         ));
     }
 
-    let mut numbers = VecDeque::from(expect_numbers(name, args)?);
+    let mut numbers = VecDeque::from(expect_numbers(args)?);
     let mut prev = numbers.pop_front().unwrap();
     for number in numbers {
         if !cmp(prev, number) {

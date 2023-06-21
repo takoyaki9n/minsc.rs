@@ -10,32 +10,41 @@ use crate::{
     value::Value::{Bool, BuiltInProc, Closure, SpecialForm, Symbol},
 };
 
-fn expect_symbol(expr: &Expression) -> Result<String, String> {
-    expr.as_symbol()
-        .map_err(|_| format!("Syntax Error: symbol is expected: {}", expr))
+pub(crate) fn expect_number(expr: &Expression) -> Result<i64, String> {
+    expr.as_number()
+        .map_err(|_| format!("Type Error: number is expected: {}", expr))
 }
 
-fn expect_list(expr: &Expression) -> Result<Vec<Expression>, String> {
+pub(crate) fn expect_symbol(expr: &Expression) -> Result<String, String> {
+    expr.as_symbol()
+        .map_err(|_| format!("Type Error: symbol is expected: {}", expr))
+}
+
+pub(crate) fn expect_list(expr: &Expression) -> Result<Vec<Expression>, String> {
     expr.as_vec()
         .map_err(|_| format!("Syntax Error: proper list is expected: {}", expr))
 }
 
-fn expect_symbols(expr: &Expression) -> Result<Vec<String>, String> {
-    let exprs = expect_list(expr)?;
-
-    let mut symbols = vec![];
-    for expr in exprs {
-        symbols.push(expect_symbol(&expr)?);
-    }
-
-    Ok(symbols)
+fn try_map_expressions<T, E, F>(exprs: &[Expression], f: F) -> Result<Vec<T>, E>
+where
+    F: Fn(&Expression) -> Result<T, E>,
+{
+    exprs.iter().try_fold(vec![], |mut acc, expr| {
+        acc.push(f(expr)?);
+        Ok(acc)
+    })
 }
 
-fn map_eval(exprs: &[Expression], env: &Env) -> Result<Vec<Expression>, String> {
-    exprs.iter().try_fold(Vec::new(), |mut values, expr| {
-        values.push(eval_expression(expr, env)?);
-        Ok(values)
-    })
+pub(crate) fn expect_numbers(exprs: &[Expression]) -> Result<Vec<i64>, String> {
+    try_map_expressions(exprs, expect_number)
+}
+
+pub(crate) fn expect_symbols(exprs: &[Expression]) -> Result<Vec<String>, String> {
+    try_map_expressions(exprs, expect_symbol)
+}
+
+fn eval_expressions(exprs: &[Expression], env: &Env) -> Result<Vec<Expression>, String> {
+    try_map_expressions(exprs, |expr| eval_expression(expr, env))
 }
 
 fn eval_define(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
@@ -58,7 +67,7 @@ fn eval_define(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
         }
         Some(Cons(car, cdr)) => {
             let name = expect_symbol(car)?;
-            let params = expect_symbols(cdr)?;
+            let params = expect_list(cdr).and_then(|cdrs| expect_symbols(&cdrs))?;
             let body = exprs.map(Rc::clone).collect();
 
             Ok((name, closure(params, body, Rc::clone(env))))
@@ -90,10 +99,10 @@ fn eval_if(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
 fn eval_lambda(exprs: &[Expression], env: &Env) -> Result<Expression, String> {
     let mut exprs = exprs.iter();
 
-    let params = exprs.next().map_or(
-        Err("Syntax Error: malformed labbda".to_string()),
-        expect_symbols,
-    )?;
+    let params = exprs
+        .next()
+        .ok_or("Syntax Error: malformed lambda".to_string())
+        .and_then(|expr| expect_symbols(&expect_list(expr)?))?;
 
     let body = exprs.map(Rc::clone).collect();
 
@@ -204,7 +213,7 @@ fn eval_apply(proc: &Expression, exprs: &[Expression], env: &Env) -> Result<Expr
     match eval_expression(proc, env)?.as_ref() {
         Atom(SpecialForm { eval, .. }) => eval(exprs, env),
         Atom(BuiltInProc { proc, .. }) => {
-            let args = map_eval(exprs, env)?;
+            let args = eval_expressions(exprs, env)?;
             proc(&args)
         }
         Atom(Closure {
