@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     env::Env,
-    expression::{bool, built_in_proc, int, Expression, ExpressionData},
+    expression::{bool, built_in_proc, int, Expression, ExpressionInner},
     value::Value,
 };
 
@@ -10,7 +10,7 @@ fn expect_numbers(name: &str, values: Vec<Expression>) -> Result<Vec<i64>, Strin
     values
         .into_iter()
         .try_fold(Vec::new(), |mut numbers, expr| match *expr {
-            ExpressionData::Atom(Value::Int(number)) => {
+            ExpressionInner::Atom(Value::Int(number)) => {
                 numbers.push(number);
                 Ok(numbers)
             }

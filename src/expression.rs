@@ -3,14 +3,14 @@ use std::{fmt, rc::Rc};
 use crate::{env::Env, value::Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExpressionData {
+pub enum ExpressionInner {
     Nil,
     Atom(Value),
     Cons(Expression, Expression),
 }
-pub type Expression = Rc<ExpressionData>;
+pub type Expression = Rc<ExpressionInner>;
 
-impl ExpressionData {
+impl ExpressionInner {
     pub fn as_vec(&self) -> Option<Vec<Expression>> {
         let mut exprs = vec![];
         let mut expr = self;
@@ -28,11 +28,11 @@ impl ExpressionData {
 }
 
 pub fn nil() -> Expression {
-    Rc::new(ExpressionData::Nil)
+    Rc::new(ExpressionInner::Nil)
 }
 
 pub fn atom(v: Value) -> Expression {
-    Rc::new(ExpressionData::Atom(v))
+    Rc::new(ExpressionInner::Atom(v))
 }
 
 pub fn undef() -> Expression {
@@ -76,7 +76,7 @@ pub fn closure(params: Vec<String>, body: Vec<Expression>, env: Env) -> Expressi
 }
 
 pub fn cons(car: Expression, cdr: Expression) -> Expression {
-    Rc::new(ExpressionData::Cons(car, cdr))
+    Rc::new(ExpressionInner::Cons(car, cdr))
 }
 
 #[cfg(test)]
@@ -86,18 +86,18 @@ pub fn list(exprs: Vec<Expression>) -> Expression {
         .rfold(nil(), |list, expr| cons(expr, list))
 }
 
-fn fmt_expression(expr: &ExpressionData, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
+fn fmt_expression(expr: &ExpressionInner, f: &mut fmt::Formatter<'_>, is_cdr: bool) -> fmt::Result {
     match expr {
-        ExpressionData::Nil if is_cdr => write!(f, ")"),
-        ExpressionData::Nil => write!(f, "()"),
-        ExpressionData::Atom(s) if is_cdr => write!(f, ". {})", s),
-        ExpressionData::Atom(s) => write!(f, "{}", s),
-        ExpressionData::Cons(car, cdr) => {
+        ExpressionInner::Nil if is_cdr => write!(f, ")"),
+        ExpressionInner::Nil => write!(f, "()"),
+        ExpressionInner::Atom(s) if is_cdr => write!(f, ". {})", s),
+        ExpressionInner::Atom(s) => write!(f, "{}", s),
+        ExpressionInner::Cons(car, cdr) => {
             if !is_cdr {
                 write!(f, "(")?;
             }
             fmt_expression(car.as_ref(), f, false)?;
-            if *cdr.as_ref() != ExpressionData::Nil {
+            if *cdr.as_ref() != ExpressionInner::Nil {
                 write!(f, " ")?;
             }
             fmt_expression(cdr.as_ref(), f, true)
@@ -105,7 +105,7 @@ fn fmt_expression(expr: &ExpressionData, f: &mut fmt::Formatter<'_>, is_cdr: boo
     }
 }
 
-impl fmt::Display for ExpressionData {
+impl fmt::Display for ExpressionInner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt_expression(self, f, false)
     }

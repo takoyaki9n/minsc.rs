@@ -4,12 +4,12 @@ use crate::{
     env::{Env, EnvMaker},
     expression::{
         closure, special_form, symbol, undef, Expression,
-        ExpressionData::{self, Atom, Cons},
+        ExpressionInner::{self, Atom, Cons},
     },
     value::Value::*,
 };
 
-fn as_symbol(expr: &ExpressionData) -> Option<String> {
+fn as_symbol(expr: &ExpressionInner) -> Option<String> {
     if let Atom(Symbol(symbol)) = expr {
         Some(symbol.to_string())
     } else {
@@ -17,7 +17,7 @@ fn as_symbol(expr: &ExpressionData) -> Option<String> {
     }
 }
 
-fn expect_symbol(expr: &ExpressionData) -> Result<String, String> {
+fn expect_symbol(expr: &ExpressionInner) -> Result<String, String> {
     as_symbol(expr).ok_or("Syntax Error: symbol is expected.".to_string())
 }
 
