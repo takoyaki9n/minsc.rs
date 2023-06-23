@@ -13,7 +13,7 @@ mod value;
 
 fn render_config() -> RenderConfig {
     let mut config = RenderConfig::empty();
-    let prefix = Styled::new("minsc>");
+    let prefix = Styled::new("minsc.rs>");
     config.prompt_prefix = prefix;
     config.answered_prompt_prefix = prefix;
 
