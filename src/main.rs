@@ -3,6 +3,7 @@ use inquire::{
     ui::{RenderConfig, Styled},
     Text,
 };
+use nom::Finish;
 use parser::parse;
 
 mod env;
@@ -34,12 +35,13 @@ fn main() {
                     break;
                 }
 
-                match parse(&input) {
-                    Ok((_, expr)) => match interpreter.eval(expr) {
+                match parse(&input).finish() {
+                    Ok((_, None)) => continue,
+                    Ok((_, Some(expr))) => match interpreter.eval(expr) {
                         Ok(reducted) => println!("{}", reducted),
                         Err(error) => println!("{}", error),
                     },
-                    Err(error) => println!("{}", error),
+                    Err(error) => println!("{:?}", nom::error::convert_error(input.as_str(), error)),
                 }
             }
             Err(error) => {
