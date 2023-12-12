@@ -11,6 +11,7 @@ mod eval;
 mod expression;
 mod parser;
 mod value;
+mod parser_new;
 
 fn render_config() -> RenderConfig {
     let mut config = RenderConfig::empty();
