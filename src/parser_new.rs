@@ -1,5 +1,13 @@
 use crate::expression::{bool, cons, int, nil, symbol, Expression};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ParseError {
+    RedundantExpression(String),
+    UnclosedOpenParenthesis,
+    MalformedExpression(String),
+    UnexpectedEOF,
+}
+
 /// ```
 /// EXPRESSION ::= "(" CAR | ATOM
 /// CAR        ::= ")" | S_EXPRESSION CDR
@@ -9,7 +17,7 @@ use crate::expression::{bool, cons, int, nil, symbol, Expression};
 /// INT        ::= [+-]? [0-9]+
 /// SYMBOL     ::= [^(){}\[\];"'`|]
 /// ```
-pub(crate) fn parse(code: &str) -> Result<Option<Expression>, String> {
+pub(crate) fn parse(code: &str) -> Result<Option<Expression>, ParseError> {
     let code = code.trim_end();
     if code.is_empty() {
         Ok(None)
@@ -18,12 +26,12 @@ pub(crate) fn parse(code: &str) -> Result<Option<Expression>, String> {
         if rest.is_empty() {
             Ok(Some(expr))
         } else {
-            Err(format!("Redundant expression: {}", rest))
+            Err(ParseError::RedundantExpression(rest.to_owned()))
         }
     }
 }
 
-fn parse_expression(code: &str) -> Result<(&str, Expression), String> {
+fn parse_expression(code: &str) -> Result<(&str, Expression), ParseError> {
     let code = code.trim_start();
 
     if let Some(stripped) = code.strip_prefix('(') {
@@ -33,10 +41,12 @@ fn parse_expression(code: &str) -> Result<(&str, Expression), String> {
     }
 }
 
-fn parse_car(code: &str) -> Result<(&str, Expression), String> {
+fn parse_car(code: &str) -> Result<(&str, Expression), ParseError> {
     let code = code.trim_start();
 
-    if let Some(code) = code.strip_prefix(')') {
+    if code.is_empty() {
+        Err(ParseError::UnclosedOpenParenthesis)
+    } else if let Some(code) = code.strip_prefix(')') {
         Ok((code, nil()))
     } else {
         let (code, car) = parse_expression(code)?;
@@ -46,7 +56,7 @@ fn parse_car(code: &str) -> Result<(&str, Expression), String> {
     }
 }
 
-fn parse_cdr(code: &str) -> Result<(&str, Expression), String> {
+fn parse_cdr(code: &str) -> Result<(&str, Expression), ParseError> {
     let code = code.trim_start();
 
     if let Some(code) = code.strip_prefix('.') {
@@ -56,16 +66,14 @@ fn parse_cdr(code: &str) -> Result<(&str, Expression), String> {
         if let Some(code) = code.strip_prefix(')') {
             Ok((code, expr))
         } else {
-            Err(format!("Unclosed parencesis: {}", code))
+            Err(ParseError::MalformedExpression(code.to_owned()))
         }
     } else {
         parse_car(code)
     }
 }
 
-fn parse_atom(code: &str) -> Result<(&str, Expression), String> {
-    let code = code.trim_start();
-
+fn parse_atom(code: &str) -> Result<(&str, Expression), ParseError> {
     match parse_token(code) {
         Some((rest, token)) => {
             if let Some(expr) = parse_bool(token) {
@@ -76,7 +84,7 @@ fn parse_atom(code: &str) -> Result<(&str, Expression), String> {
                 Ok((rest, symbol(token.to_string())))
             }
         }
-        None => Err("Unexpected EOF".to_string()),
+        None => Err(ParseError::UnexpectedEOF),
     }
 }
 
@@ -108,11 +116,15 @@ fn parse_int(token: &str) -> Option<Expression> {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::expression::{bool, cons, int, list, nil, symbol};
+    use crate::{
+        expression::{bool, cons, int, list, nil, symbol},
+        parser_new::ParseError,
+    };
 
     #[test]
     fn test_parse_empty() {
         assert_eq!(parse(""), Ok(None));
+        assert_eq!(parse("  "), Ok(None));
     }
 
     #[test]
@@ -157,6 +169,7 @@ mod tests {
         let cases = vec![
             ("()", nil()),
             (" (  ) ", nil()),
+            ("(())", list(vec![nil()])),
             ("(x)", list(vec![symbol("x")])),
             (" ( x ) ", list(vec![symbol("x")])),
             ("(#t 2 y)", list(vec![bool(true), int(2), symbol("y")])),
@@ -173,5 +186,42 @@ mod tests {
             let expected = Ok(Some(expr));
             assert_eq!(parse(code), expected);
         }
+    }
+
+    #[test]
+    fn test_parse_cons() {
+        let cases = vec![
+            (
+                "(x y . z)",
+                cons(symbol("x"), cons(symbol("y"), symbol("z"))),
+            ),
+            (
+                "((1 2).(3 4))",
+                cons(list(vec![int(1), int(2)]), list(vec![int(3), int(4)])),
+            ),
+            (
+                "(x y. z)",
+                list(vec![symbol("x"), symbol("y."), symbol("z")]),
+            ),
+            ("(x y . ())", list(vec![symbol("x"), symbol("y")])),
+        ];
+        for (code, expr) in cases {
+            let expected = Ok(Some(expr));
+            assert_eq!(parse(code), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_error() {
+        assert_eq!(
+            parse("1 2"),
+            Err(ParseError::RedundantExpression(" 2".to_owned()))
+        );
+        assert_eq!(parse("(1 2 3"), Err(ParseError::UnclosedOpenParenthesis));
+        assert_eq!(parse("(()"), Err(ParseError::UnclosedOpenParenthesis));
+        assert_eq!(
+            parse("(1 . 2 3)"),
+            Err(ParseError::MalformedExpression("3)".to_owned()))
+        );
     }
 }
