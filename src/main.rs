@@ -3,7 +3,6 @@ use inquire::{
     ui::{RenderConfig, Styled},
     Text,
 };
-use nom::Finish;
 use parser::parse;
 
 mod env;
@@ -11,7 +10,6 @@ mod eval;
 mod expression;
 mod parser;
 mod value;
-mod parser_new;
 
 fn render_config() -> RenderConfig {
     let mut config = RenderConfig::empty();
@@ -36,13 +34,15 @@ fn main() {
                     break;
                 }
 
-                match parse(&input).finish() {
-                    Ok((_, None)) => continue,
-                    Ok((_, Some(expr))) => match interpreter.eval(expr) {
-                        Ok(reducted) => println!("{}", reducted),
+                match parse(&input) {
+                    Ok(None) => continue,
+                    Ok(Some(expr)) => match interpreter.eval(expr) {
+                        Ok(evaled) => println!("{}", evaled),
                         Err(error) => println!("{}", error),
                     },
-                    Err(error) => println!("{:?}", nom::error::convert_error(input.as_str(), error)),
+                    Err(error) => {
+                        println!("{:?}", error)
+                    }
                 }
             }
             Err(error) => {

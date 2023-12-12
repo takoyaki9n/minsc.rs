@@ -258,7 +258,7 @@ mod tests {
         ($code: expr, $expected: expr) => {{
             let interpreter = Interpreter::new();
             interpreter.init();
-            let (_, expr) = parse($code).unwrap();
+            let expr = parse($code).unwrap();
             assert_eq!(interpreter.eval(expr.unwrap()), Ok($expected), "{}", $code);
         }};
     }
@@ -266,7 +266,7 @@ mod tests {
         ($code: expr) => {{
             let interpreter = Interpreter::new();
             interpreter.init();
-            let (_, expr) = parse($code).unwrap();
+            let expr = parse($code).unwrap();
             assert!(interpreter.eval(expr.unwrap()).is_err(), "{}", $code);
         }};
     }
@@ -392,7 +392,7 @@ mod tests {
             let interpreter = Interpreter::new();
             interpreter.init();
             let actual = codes.iter().fold(Ok(undef()), |_, code| {
-                let (_, expr) = parse(code).unwrap();
+                let expr = parse(code).unwrap();
                 interpreter.eval(expr.unwrap())
             });
             assert_eq!(actual, Ok(expected), "{}", codes.join("\n"));
