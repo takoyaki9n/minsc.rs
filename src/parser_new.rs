@@ -9,32 +9,63 @@ use crate::expression::{bool, cons, int, nil, symbol, Expression};
 /// INT        ::= [+-]? [0-9]+
 /// SYMBOL     ::= [^(){}\[\];"'`|]
 /// ```
-pub(crate) fn parse(code: &str) -> Result<Expression, String> {
-    let (code, expr) = parse_expression(code)?;
-
+pub(crate) fn parse(code: &str) -> Result<Option<Expression>, String> {
     let code = code.trim_end();
     if code.is_empty() {
-        Ok(expr)
+        Ok(None)
     } else {
-        Err(format!("Redundant expression: {}", code))
+        let (rest, expr) = parse_expression(code)?;
+        if rest.is_empty() {
+            Ok(Some(expr))
+        } else {
+            Err(format!("Redundant expression: {}", rest))
+        }
     }
 }
 
 fn parse_expression(code: &str) -> Result<(&str, Expression), String> {
     let code = code.trim_start();
-    parse_atom(code)
+
+    if let Some(stripped) = code.strip_prefix('(') {
+        parse_car(stripped)
+    } else {
+        parse_atom(code)
+    }
 }
 
 fn parse_car(code: &str) -> Result<(&str, Expression), String> {
-    todo!()
+    let code = code.trim_start();
+
+    if let Some(code) = code.strip_prefix(')') {
+        Ok((code, nil()))
+    } else {
+        let (code, car) = parse_expression(code)?;
+        let (code, cdr) = parse_cdr(code)?;
+
+        Ok((code, cons(car, cdr)))
+    }
 }
 
 fn parse_cdr(code: &str) -> Result<(&str, Expression), String> {
-    todo!()
+    let code = code.trim_start();
+
+    if let Some(code) = code.strip_prefix('.') {
+        let (code, expr) = parse_expression(code)?;
+
+        let code = code.trim_start();
+        if let Some(code) = code.strip_prefix(')') {
+            Ok((code, expr))
+        } else {
+            Err(format!("Unclosed parencesis: {}", code))
+        }
+    } else {
+        parse_car(code)
+    }
 }
 
 fn parse_atom(code: &str) -> Result<(&str, Expression), String> {
     let code = code.trim_start();
+
     match parse_token(code) {
         Some((rest, token)) => {
             if let Some(expr) = parse_bool(token) {
@@ -71,7 +102,7 @@ fn parse_bool(token: &str) -> Option<Expression> {
 }
 
 fn parse_int(token: &str) -> Option<Expression> {
-    token.parse::<i64>().ok().map(|num| int(num))
+    token.parse::<i64>().ok().map(int)
 }
 
 #[cfg(test)]
@@ -80,29 +111,67 @@ mod tests {
     use crate::expression::{bool, cons, int, list, nil, symbol};
 
     #[test]
+    fn test_parse_empty() {
+        assert_eq!(parse(""), Ok(None));
+    }
+
+    #[test]
     fn test_parse_bool() {
-        assert_eq!(parse("#t"), Ok((bool(true))));
-        assert_eq!(parse("#f"), Ok((bool(false))));
+        let cases = vec![("#t", true), ("#f", false)];
+        for (code, value) in cases {
+            let expected = Ok(Some(bool(value)));
+            assert_eq!(parse(code), expected);
+        }
     }
 
     #[test]
     fn test_parse_int() {
-        assert_eq!(parse("0"), Ok(int(0)));
-        assert_eq!(parse("+0"), Ok(int(0)));
-        assert_eq!(parse("-0"), Ok(int(0)));
-        assert_eq!(parse("42"), Ok(int(42)));
-        assert_eq!(parse("+123"), Ok(int(123)));
-        assert_eq!(parse("-7"), Ok(int(-7)));
-        assert_eq!(parse("0222"), Ok(int(222)));
-        assert_eq!(parse("+00816"), Ok(int(816)));
-        assert_eq!(parse("-0002"), Ok(int(-2)));
+        let cases = vec![
+            ("0", 0),
+            ("+0", 0),
+            ("-0", 0),
+            ("42", 42),
+            ("+123", 123),
+            ("-7", -7),
+            ("0222", 222),
+            ("+0816", 816),
+            ("-0002", -2),
+        ];
+        for (code, value) in cases {
+            let expected = Ok(Some(int(value)));
+            assert_eq!(parse(code), expected);
+        }
     }
 
     #[test]
     fn test_parse_symbol() {
-        assert_eq!(parse("x"), Ok(symbol("x")));
-        assert_eq!(parse("foo"), Ok(symbol("foo")));
-        assert_eq!(parse("+"), Ok(symbol("+")));
-        assert_eq!(parse("-"), Ok(symbol("-")));
+        let cases = vec!["x", "foo", "+", "-", "3d", "x1"];
+        for sym in cases {
+            let expected = Ok(Some(symbol(sym)));
+            assert_eq!(parse(sym), expected);
+        }
+    }
+
+    #[test]
+    fn test_parse_list() {
+        let cases = vec![
+            ("()", nil()),
+            (" (  ) ", nil()),
+            ("(x)", list(vec![symbol("x")])),
+            (" ( x ) ", list(vec![symbol("x")])),
+            ("(#t 2 y)", list(vec![bool(true), int(2), symbol("y")])),
+            (
+                "(let ((a 2)) (- a))",
+                list(vec![
+                    symbol("let"),
+                    list(vec![list(vec![symbol("a"), int(2)])]),
+                    list(vec![symbol("-"), symbol("a")]),
+                ]),
+            ),
+        ];
+        for (code, expr) in cases {
+            let expected = Ok(Some(expr));
+            assert_eq!(parse(code), expected);
+        }
     }
 }
